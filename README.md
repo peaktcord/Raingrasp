@@ -8,6 +8,8 @@ A C++ recreation of the two *The Elder Scrolls Travels* feature phone games, **S
 
 This does not include any game assets. You will need to have your own copy of the original mobile game `.jar` files.
 
+You can see it in action [here](https://www.youtube.com/watch?v=O6PAgPmXzc8).
+
 ## Modernizations
 
 This uses controls designed for a keyboard, not a phone pad. Additional shortcuts have been added to reduce on the amount of menuing.
