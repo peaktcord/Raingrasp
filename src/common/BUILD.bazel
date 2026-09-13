@@ -1,0 +1,34 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("//bazel:copts.bzl", "CXX_COPTS")
+
+package(default_visibility = ["//visibility:private"])
+
+cc_library(
+    name = "runtime",
+    srcs = [
+        "save_records.cpp",
+    ],
+    hdrs = [
+        "font_metrics.hpp",
+        "runtime.hpp",
+        "save_records.hpp",
+        "ui.hpp",
+    ],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/common/bot:__pkg__",
+        "//src/common/game:__pkg__",
+        "//src/common/host:__pkg__",
+        "//src/common/input:__pkg__",
+        "//src/common/platform:__pkg__",
+        "//src/common/render:__pkg__",
+        "//src/common/replay:__pkg__",
+        "//src/common/sdl:__pkg__",
+        "//src/dawnstar:__pkg__",
+        "//src/dawnstar/host:__pkg__",
+        "//src/stormhold:__pkg__",
+        "//src/stormhold/host:__pkg__",
+    ],
+    deps = ["//src/common/platform:platform"],
+)

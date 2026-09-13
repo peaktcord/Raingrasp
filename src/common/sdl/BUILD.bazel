@@ -1,0 +1,115 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("//bazel:copts.bzl", "CXX_COPTS")
+
+package(default_visibility = ["//visibility:private"])
+
+exports_files(
+    ["CONTROLS.txt"],
+    visibility = ["//:__pkg__"],
+)
+
+# The one window. Which game it runs is decided by the data intake finds.
+cc_binary(
+    name = "raingrasp",
+    srcs = ["main_sdl.cpp"],
+    copts = CXX_COPTS,
+    # This is a windowed application, not a console program. Keep the ordinary
+    # main() entry point while asking Windows not to allocate a terminal.
+    linkopts = [
+        "/ENTRY:mainCRTStartup",
+        "/SUBSYSTEM:WINDOWS",
+    ],
+    data = ["@decomp_sdl3//:runtime"],
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//:__pkg__"],
+    deps = [
+        "//src/common/host:registry",
+        "//src/common:runtime",
+        "//src/common/input:menu_shortcuts",
+        "//src/common/platform:crash_trace",
+        "//src/common/platform:desktop",
+        "//src/common/platform:intake",
+        "//src/common/platform:platform",
+        "//src/common/platform:port_settings",
+        "//src/common/platform:sdl_audio",
+        "//src/common/platform:version",
+        "//src/common/render:render",
+        "//src/common/render:widescreen",
+        "@decomp_sdl3//:sdl3",
+    ],
+)
+
+# The same game, built to be debugged.  Three differences from `raingrasp`:
+# a console subsystem so the log is visible as it is written, unoptimised code
+# with full debug info so a stack walk names functions and lines, and
+# RAINGRASP_THROW_TRACE, which makes main install the throw-site tracer.
+#
+# That last one is the reason this target exists.  GameCanvas::tick catches
+# std::exception and turns it into an error screen, so a bounds throw never
+# reaches the unhandled-exception filter and the log gets a message with no
+# frames behind it.  Tracing at the throw site is the only way to see which
+# array was indexed, and it is far too slow to leave in a shipping build.
+#
+# Build and run:
+#   bazel build -c dbg //src/common/sdl:raingrasp_debug
+#   bazel-bin/src/common/sdl/raingrasp_debug.exe
+cc_binary(
+    name = "raingrasp_debug",
+    srcs = ["main_sdl.cpp"],
+    # No debug copts here: `-c dbg` already builds unoptimised with debug info
+    # (/Z7), and spelling /Zi on top of it only overrides that with a slower
+    # PDB path.  Build this target with `-c dbg` -- see the command below.
+    copts = CXX_COPTS,
+    defines = ["RAINGRASP_THROW_TRACE=1"],
+    features = ["generate_pdb_file"],
+    # A console subsystem, unlike the shipping binary: the point of this build
+    # is to watch the log scroll past while reproducing a crash.
+    linkopts = [
+        "/SUBSYSTEM:CONSOLE",
+        "/DEBUG:FULL",
+    ],
+    data = ["@decomp_sdl3//:runtime"],
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//:__pkg__"],
+    deps = [
+        "//src/common/host:registry",
+        "//src/common:runtime",
+        "//src/common/input:menu_shortcuts",
+        "//src/common/platform:crash_trace",
+        "//src/common/platform:desktop",
+        "//src/common/platform:intake",
+        "//src/common/platform:platform",
+        "//src/common/platform:port_settings",
+        "//src/common/platform:sdl_audio",
+        "//src/common/platform:version",
+        "//src/common/render:render",
+        "//src/common/render:widescreen",
+        "@decomp_sdl3//:sdl3",
+    ],
+)
+
+# Watch the bot play, in a window. `dawnstar_playthrough_*_test` runs the same
+# Bot headless with painting off; this paints every tick and presents it, so
+# the sweep, the questioning and the boss fight can be seen. A front end, so it
+# lives here with the other one rather than in the game tree.
+cc_binary(
+    name = "dawnstar_bot_viewer",
+    srcs = ["bot_viewer.cpp"],
+    copts = CXX_COPTS,
+    # No resources dep: the resource directory is a command-line argument, so
+    # this stays out of the tightly-scoped //:dawnstar_resources visibility
+    # list. Point it at bazel-bin/.../dawnstar_resources, or at any unpacked
+    # copy.
+    data = ["@decomp_sdl3//:runtime"],
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//:__pkg__"],
+    deps = [
+        "//src/common/host:game_host",
+        "//src/common/platform:crash_trace",
+        "//src/common/platform:desktop",
+        "//src/common/render:render",
+        "//src/common/render:widescreen",
+        "//src/dawnstar:bot",
+        "@decomp_sdl3//:sdl3",
+    ],
+)

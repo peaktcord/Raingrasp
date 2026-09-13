@@ -1,0 +1,36 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("//bazel:copts.bzl", "CXX_COPTS")
+
+package(default_visibility = ["//visibility:private"])
+
+cc_library(
+    name = "menu_shortcuts",
+    srcs = ["menu_shortcuts.cpp"],
+    hdrs = ["menu_shortcuts.hpp"],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/common/game:__pkg__",
+        "//src/common/host:__pkg__",
+        "//src/common/sdl:__pkg__",
+        "//src/dawnstar:__subpackages__",
+        "//src/stormhold:__subpackages__",
+    ],
+    deps = ["//src/common:runtime"],
+)
+
+cc_library(
+    name = "game_shortcut_host",
+    srcs = ["game_shortcut_host.cpp"],
+    hdrs = ["game_shortcut_host.hpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = [
+        "//src/dawnstar/input:__pkg__",
+        "//src/stormhold/input:__pkg__",
+    ],
+    deps = [
+        ":menu_shortcuts",
+        "//src/common/game:controller",
+    ],
+)

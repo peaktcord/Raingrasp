@@ -1,0 +1,61 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("//bazel:copts.bzl", "CXX_COPTS")
+
+package(default_visibility = ["//visibility:private"])
+
+# The host seam: what a front end needs from a translated game, with no game
+# type in it. Each game implements it in `<game>/host`.
+cc_library(
+    name = "game_host",
+    srcs = ["game_host.cpp"],
+    hdrs = ["game_host.hpp"],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/common/replay:__pkg__",
+        "//src/common/sdl:__pkg__",
+        "//src/dawnstar:__subpackages__",
+        "//src/stormhold:__subpackages__",
+    ],
+    deps = [
+        "//src/common/game:ui",
+        "//src/common/input:menu_shortcuts",
+        "//src/common:runtime",
+        "//src/common/replay:replay",
+    ],
+)
+
+# Both hosts, looked up by id. The only target that depends on both games.
+cc_library(
+    name = "registry",
+    srcs = ["registry.cpp"],
+    hdrs = ["registry.hpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = [
+        "//:__pkg__",
+        "//src/common/replay:__pkg__",
+        "//src/common/sdl:__pkg__",
+    ],
+    deps = [
+        ":game_host",
+        "//src/dawnstar/host:host",
+        "//src/stormhold/host:host",
+    ],
+)
+
+cc_binary(
+    name = "raingrasp_smoke",
+    srcs = ["smoke_main.cpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//:__pkg__"],
+    deps = [
+        ":registry",
+        "//src/common:runtime",
+        "//src/common/platform:desktop",
+        "//src/common/platform:intake",
+        "//src/common/platform:platform",
+    ],
+)

@@ -1,0 +1,59 @@
+# Artifacts
+/artifacts/
+
+# Local third-party binaries. The STB sources and their Bazel package are
+# publishable build inputs and must remain visible to Git.
+/tools/3p/cfr-*.jar
+
+# Bazel convenience symlinks and local output
+/out/
+/bazel-bin
+/bazel-out
+/bazel-testlogs
+/bazel-raingrasp
+/maps
+
+# Compiled objects / binaries
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+*.pdb
+*.ilk
+*.exp
+
+# IDE / editor
+.vs/
+.vscode/
+*.sln
+*.vcxproj*
+*.suo
+*.user
+.idea/
+*.swp
+*~
+
+# OS junk
+Thumbs.db
+.DS_Store
+
+# Save state written by the games and by the test drivers (smoke, capture,
+# maps, menu). Regenerated on every run; nothing here is an input.
+/saves/
+
+# Local packaging output
+/dist/
+
+# Python bytecode from repository tooling
+__pycache__/
+*.pyc
+compile_commands.json
+
+# Test sounds copied from an installed game by tools/audio/fetch_test_sounds.sh.
+# Somebody else's copyrighted assets, kept locally to hear the audio hooks fire;
+# this port ships no audio of its own (see `added-audio` in docs/DIVERGENCES.md).
+testdata/sounds/

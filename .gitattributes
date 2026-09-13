@@ -1,0 +1,7 @@
+# Sentinel files are compared byte-for-byte by //:*_sentinel_test, so they must
+# never be line-ending converted on checkout (core.autocrlf is true on Windows).
+validation/sentinels/** -text
+
+# Reference frames are compared byte-for-byte by //:*_frame_test, so they
+# must never be line-ending converted.
+verify/** binary

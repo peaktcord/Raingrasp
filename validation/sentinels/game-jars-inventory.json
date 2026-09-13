@@ -1,0 +1,50 @@
+{
+  "format_version": 1,
+  "jars": [
+    {
+      "archive_sha256": "10ea99d687e7c1a7a2cbed7552b73302ce248b94f66665db7b9703c08a978cd7",
+      "archive_size": 173796,
+      "canonical_name": "tes-travels-dawnstar-1.0.0.jar",
+      "content_tree_sha256": "1b9e98b38629a8e34f8af34fe92fe7fe5ad2a2bc5eb3ae351ccda65e0648deef",
+      "entry_count": 20,
+      "midlet": {
+        "configuration": "CLDC-1.0",
+        "main_class": "ESGame",
+        "name": "DawnStar by milaro",
+        "profile": "MIDP-1.0",
+        "vendor": "Vir2L Studios",
+        "version": "1.0.0"
+      }
+    },
+    {
+      "archive_sha256": "1113f5be426119c1f30d2c2da08e5e280064d0aad58f032dd48af5aa2f70354c",
+      "archive_size": 165565,
+      "canonical_name": "tes-travels-stormhold-1.0.10-repacked.jar",
+      "content_tree_sha256": "5b2f6740926c4cc105ac0613f129106239b2e277eae88dc41259569216109718",
+      "entry_count": 76,
+      "midlet": {
+        "configuration": "CLDC-1.0",
+        "main_class": "ESGame",
+        "name": "The Elder Scrolls",
+        "profile": "MIDP-1.0",
+        "vendor": "Vir2L Studios",
+        "version": "1.0.10"
+      }
+    },
+    {
+      "archive_sha256": "d9a813196a5116b99ce54278efe392b1aee977973bc42aa756426447828fc26b",
+      "archive_size": 164255,
+      "canonical_name": "tes-travels-stormhold-1.0.10.jar",
+      "content_tree_sha256": "5b2f6740926c4cc105ac0613f129106239b2e277eae88dc41259569216109718",
+      "entry_count": 76,
+      "midlet": {
+        "configuration": "CLDC-1.0",
+        "main_class": "ESGame",
+        "name": "The Elder Scrolls",
+        "profile": "MIDP-1.0",
+        "vendor": "Vir2L Studios",
+        "version": "1.0.10"
+      }
+    }
+  ]
+}

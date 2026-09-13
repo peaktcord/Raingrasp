@@ -1,0 +1,275 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("//bazel:copts.bzl", "CXX_COPTS")
+
+package(default_visibility = ["//visibility:private"])
+
+# Every source here, for the registry check (tools/check_registry.py).
+filegroup(
+    name = "all_sources",
+    srcs = glob([
+        "*.cpp",
+        "*.hpp",
+    ]),
+    visibility = ["//:__pkg__"],
+)
+
+VARIANT_KERNEL_CONSUMERS = [
+    "//:__pkg__",
+    "//src/common/bot:__pkg__",
+    "//src/common/host:__pkg__",
+    "//src/common/input:__pkg__",
+    "//src/dawnstar:__pkg__",
+    "//src/dawnstar/host:__pkg__",
+    "//src/stormhold:__pkg__",
+    "//src/stormhold/host:__pkg__",
+]
+
+cc_library(
+    name = "base",
+    srcs = [
+        "textwrap.cpp",
+        "util.cpp",
+    ],
+    hdrs = [
+        "binary_io.hpp",
+        "datfiles.hpp",
+        "display_target.hpp",
+        "textwrap.hpp",
+        "util.hpp",
+        "world_state.hpp",
+    ],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/common/replay:__pkg__",
+        "//src/dawnstar:__pkg__",
+        "//src/dawnstar:__subpackages__",
+        "//src/stormhold:__pkg__",
+        "//src/stormhold:__subpackages__",
+    ],
+    deps = ["//src/common:runtime"],
+)
+
+cc_library(
+    name = "data",
+    srcs = [
+        "items.cpp",
+        "monsterdata.cpp",
+        "smallhelpers.cpp",
+        "spells.cpp",
+    ],
+    hdrs = [
+        "items.hpp",
+        "monsterdata.hpp",
+        "smallhelpers.hpp",
+        "spells.hpp",
+    ],
+    copts = CXX_COPTS,
+    visibility = VARIANT_KERNEL_CONSUMERS + [
+        "//src/common/replay:__pkg__",
+    ],
+    deps = [
+        ":base",
+        "//src/common:runtime",
+    ],
+)
+
+cc_library(
+    name = "combat",
+    srcs = [
+        "combatstats.cpp",
+        "formulas.cpp",
+        "inventory.cpp",
+        "melee.cpp",
+        "progression.cpp",
+        "spellcast.cpp",
+        "vitals.cpp",
+    ],
+    hdrs = [
+        "combatstats.hpp",
+        "equipment.hpp",
+        "formulas.hpp",
+        "inventory.hpp",
+        "melee.hpp",
+        "progression.hpp",
+        "skills.hpp",
+        "spellcast.hpp",
+        "vitals.hpp",
+    ],
+    copts = CXX_COPTS,
+    visibility = VARIANT_KERNEL_CONSUMERS + [
+        "//src/common/replay:__pkg__",
+    ],
+    deps = [
+        ":base",
+        ":data",
+        "//src/common:runtime",
+    ],
+)
+
+# The world classes both games shipped identically enough to share: the
+# player, the monster, and the tile-grid core every dungeon is built on.
+# World, Profile, Extension and SaveCodec are the seams the player stands on;
+# each game implements them in its own tree.
+cc_library(
+    name = "world",
+    srcs = [
+        "commandflow.cpp",
+        "dungeon_core.cpp",
+        "menuaction.cpp",
+        "monster.cpp",
+        "npc_mechanics.cpp",
+        "player.cpp",
+    ],
+    hdrs = [
+        "combatant.hpp",
+        "commandflow.hpp",
+        "dungeon_core.hpp",
+        "extension.hpp",
+        "menuaction.hpp",
+        "monster.hpp",
+        "npc_mechanics.hpp",
+        "player.hpp",
+        "profile.hpp",
+        "save_codec.hpp",
+        "uistate.hpp",
+        "world.hpp",
+    ],
+    copts = CXX_COPTS,
+    visibility = VARIANT_KERNEL_CONSUMERS + [
+        "//src/common/replay:__pkg__",
+    ],
+    deps = [
+        ":base",
+        ":combat",
+        ":data",
+        ":visibility",
+        "//src/common:runtime",
+    ],
+)
+
+cc_library(
+    name = "ui",
+    srcs = [
+        "menulist.cpp",
+        "menupaint.cpp",
+        "portoptions_menu.cpp",
+        "registered_application.cpp",
+        "splashphase.cpp",
+        "ui_widget.cpp",
+        "widget_canvas.cpp",
+    ],
+    hdrs = [
+        "menulist.hpp",
+        "menupaint.hpp",
+        "portoptions_menu.hpp",
+        "registered_application.hpp",
+        "splashphase.hpp",
+        "ui_host.hpp",
+        "ui_widget.hpp",
+        "widget_canvas.hpp",
+    ],
+    copts = CXX_COPTS,
+    visibility = VARIANT_KERNEL_CONSUMERS + [
+        "//src/common/replay:__pkg__",
+    ],
+    deps = [
+        ":base",
+        ":world",
+        "//src/common:runtime",
+        "//src/common/input:menu_shortcuts",
+    ],
+)
+
+# The game canvas: the first-person view, the HUD, the minimaps, the keys
+# and the tick, one class for both games. CanvasHost is the seam it stands
+# on; each game implements it, and the per-game art and behaviour are read
+# through the profile and the extension.
+cc_library(
+    name = "canvas",
+    srcs = ["game_canvas.cpp"],
+    hdrs = [
+        "canvas_host.hpp",
+        "game_canvas.hpp",
+    ],
+    copts = CXX_COPTS,
+    visibility = VARIANT_KERNEL_CONSUMERS + [
+        "//src/common/replay:__pkg__",
+    ],
+    deps = [
+        ":base",
+        ":combat",
+        ":data",
+        ":world",
+        "//src/common:runtime",
+        "//src/common/render:sprite",
+    ],
+)
+
+# The application controller: lifecycle, display switching, helper jobs, save
+# slots and the screens both games have, one class for both games. Variant
+# is the seam the one-game screens and dialogue trees stand behind; each
+# game implements it beside its Extension.
+cc_library(
+    name = "controller",
+    srcs = [
+        "game.cpp",
+        "game_abilities_commands.cpp",
+        "game_character_commands.cpp",
+        "game_commands.cpp",
+        "game_help_commands.cpp",
+        "game_inventory_commands.cpp",
+        "game_menu_commands.cpp",
+        "game_navigation_commands.cpp",
+    ],
+    hdrs = [
+        "game.hpp",
+        "variant.hpp",
+    ],
+    copts = CXX_COPTS,
+    visibility = VARIANT_KERNEL_CONSUMERS + [
+        "//src/common/replay:__pkg__",
+    ],
+    deps = [
+        ":base",
+        ":canvas",
+        ":combat",
+        ":data",
+        ":save",
+        ":ui",
+        ":world",
+        "//src/common:runtime",
+        "//src/common/render:sprite",
+    ],
+)
+
+# The tick's one guarded paint; see tools/check_paint_once.py.
+filegroup(
+    name = "paint_once_source",
+    srcs = ["game_canvas.cpp"],
+    visibility = ["//:__pkg__"],
+)
+
+cc_library(
+    name = "save",
+    srcs = ["savegame.cpp"],
+    hdrs = ["savegame.hpp"],
+    copts = CXX_COPTS,
+    visibility = VARIANT_KERNEL_CONSUMERS,
+    deps = [
+        ":base",
+        "//src/common:runtime",
+    ],
+)
+
+cc_library(
+    name = "visibility",
+    srcs = ["visibility.cpp"],
+    hdrs = ["visibility.hpp"],
+    copts = CXX_COPTS,
+    visibility = VARIANT_KERNEL_CONSUMERS,
+    deps = [
+        ":base",
+        "//src/common:runtime",
+    ],
+)

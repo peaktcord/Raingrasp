@@ -1,0 +1,276 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("//bazel:copts.bzl", "CXX_COPTS")
+load("//bazel:variant_diagnostic.bzl", "variant_diagnostic_pair")
+
+package(default_visibility = ["//visibility:private"])
+
+# What is Dawnstar's own: its profile, its Extension and Variant, its
+# dungeon generator, its NPC roster and dialogue trees, and its save format.
+# The controller itself is //src/common/game:controller.
+cc_library(
+    name = "dawnstar_converted",
+    srcs = [
+        "dungeon.cpp",
+        "dungeon_gen.cpp",
+        "npc_script.cpp",
+        "extension.cpp",
+        "profile.cpp",
+        "save_codec.cpp",
+        "variant.cpp",
+    ],
+    hdrs = [
+        "dungeon.hpp",
+        "dungeon_gen.hpp",
+        "npc_script.hpp",
+        "extension.hpp",
+        "profile.hpp",
+        "save_codec.hpp",
+        "variant.hpp",
+    ],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = [
+        "//:__pkg__",
+        "//src/dawnstar:__subpackages__",
+    ],
+    deps = [
+        "//src/common/game:base",
+        "//src/common/game:canvas",
+        "//src/common/game:combat",
+        "//src/common/game:controller",
+        "//src/common/game:data",
+        "//src/common/game:save",
+        "//src/common/game:ui",
+        "//src/common/game:visibility",
+        "//src/common/game:world",
+        "//src/common:runtime",
+        "//src/common/render:minimap",
+        "//src/common/render:sprite",
+        "//src/common/replay:replay",
+    ],
+)
+
+cc_test(
+    name = "world_state_test",
+    srcs = ["world_state_test.cpp"],
+    copts = CXX_COPTS,
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//:__pkg__"],
+    deps = [":dawnstar_converted"],
+)
+
+cc_binary(
+    name = "dawnstar_data_dump",
+    srcs = ["data_dump.cpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//:__pkg__"],
+    deps = [
+        ":dawnstar_converted",
+        "//src/common/platform:desktop",
+        "//src/common/replay:data_harness",
+    ],
+)
+
+variant_diagnostic_pair(
+    binary_name = "dawnstar_oracle_dump",
+    test_name = "dawnstar_pure_surface_test",
+    src = "oracle_dump.cpp",
+    resources = "//:dawnstar_resources",
+    sentinel = "//:validation/sentinels/dawnstar-pure-surface.sha256",
+    size = "small",
+    deps = [
+        ":dawnstar_converted",
+        "//src/common/platform:desktop",
+    ],
+)
+
+variant_diagnostic_pair(
+    binary_name = "dawnstar_menu_dump",
+    test_name = "dawnstar_menu_test",
+    src = "menu_dump.cpp",
+    resources = "//:dawnstar_resources",
+    sentinel = "//:validation/sentinels/dawnstar-menu.sha256",
+    deps = [
+        ":dawnstar_converted",
+        "//src/common/platform:desktop",
+        "//src/common/render:render",
+        "//src/common/replay:menu_harness",
+    ],
+)
+
+variant_diagnostic_pair(
+    binary_name = "dawnstar_dungeon_dump",
+    test_name = "dawnstar_dungeon_test",
+    src = "dungeon_dump.cpp",
+    resources = "//:dawnstar_resources",
+    sentinel = "//:validation/sentinels/dawnstar-dungeons.sha256",
+    deps = [
+        ":dawnstar_converted",
+        "//src/common/platform:desktop",
+    ],
+)
+
+variant_diagnostic_pair(
+    binary_name = "dawnstar_player_dump",
+    test_name = "dawnstar_player_test",
+    src = "player_dump.cpp",
+    resources = "//:dawnstar_resources",
+    sentinel = "//:validation/sentinels/dawnstar-player.sha256",
+    deps = [
+        ":dawnstar_converted",
+        "//src/common/platform:desktop",
+        "//src/common/replay:player_harness",
+    ],
+)
+
+variant_diagnostic_pair(
+    binary_name = "dawnstar_save_dump",
+    test_name = "dawnstar_save_test",
+    src = "save_dump.cpp",
+    resources = "//:dawnstar_resources",
+    sentinel = "//:validation/sentinels/dawnstar-save.sha256",
+    deps = [
+        ":dawnstar_converted",
+        "//src/common/platform:desktop",
+    ],
+)
+
+variant_diagnostic_pair(
+    binary_name = "dawnstar_visibility_dump",
+    test_name = "dawnstar_visibility_test",
+    src = "visibility_dump.cpp",
+    resources = "//:dawnstar_resources",
+    sentinel = "//:validation/sentinels/dawnstar-visibility.sha256",
+    deps = [
+        ":dawnstar_converted",
+        "//src/common/platform:desktop",
+        "//src/common/replay:visibility_harness",
+    ],
+)
+
+variant_diagnostic_pair(
+    binary_name = "dawnstar_monster_dump",
+    test_name = "dawnstar_monster_test",
+    src = "monster_dump.cpp",
+    resources = "//:dawnstar_resources",
+    sentinel = "//:validation/sentinels/dawnstar-monsters.sha256",
+    deps = [
+        ":dawnstar_converted",
+        "//src/common/platform:desktop",
+        "//src/common/replay:monster_harness",
+    ],
+)
+
+# A bot that plays the game: walks the dungeons, fights with real rolls,
+# loots, equips, and works out the traitor by catching a lie. Shared by the
+# playthrough tests below. See bot.hpp for what it does and does not cheat at.
+cc_library(
+    name = "bot",
+    hdrs = ["bot_traitor.hpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//src/common/sdl:__pkg__"],
+    deps = [
+        ":dawnstar_converted",
+        "//src/common/bot:bot",
+    ],
+)
+
+# Does the critical path still connect? Unlike the sentinel pairs above this
+# asserts rather than comparing a dump: it drives a new character through the
+# traitor reveal and the oracle's countdown to the boss, and requires the
+# Victory screen at the end. See beat_game_test.cpp for what it cheats at.
+cc_test(
+    name = "dawnstar_beat_game_test",
+    srcs = ["beat_game_test.cpp"],
+    args = ["$(rootpath //:dawnstar_resources)"],
+    data = ["//:dawnstar_resources"],
+    copts = CXX_COPTS,
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+    visibility = ["//:__pkg__"],
+    deps = [
+        ":bot",
+        ":dawnstar_converted",
+        "//src/common/host:game_host",
+        "//src/common/platform:desktop",
+        "//src/common/render:render",
+    ],
+)
+
+
+# What save/load does to endgame state. Answers, against the real codec, whether
+# the traitor identity survives once questions have been asked and whether the
+# oracle countdown survives at all. Takes the resource dir, and optionally a
+# save directory to inspect a real save file.
+cc_test(
+    name = "dawnstar_endgame_save_test",
+    srcs = ["endgame_save_test.cpp"],
+    args = ["$(rootpath //:dawnstar_resources)"],
+    data = ["//:dawnstar_resources"],
+    copts = CXX_COPTS,
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+    visibility = ["//:__pkg__"],
+    deps = [
+        ":dawnstar_converted",
+        "//src/common/platform:desktop",
+        "//src/common/replay:replay",
+    ],
+)
+
+
+# The playthrough tests. One binary, three modes, so a failure names the stage
+# that broke. Slower than the sentinel pairs -- these actually play the game.
+[
+    cc_test(
+        name = "dawnstar_playthrough_%s_test" % stage,
+        srcs = ["playthrough_test.cpp"],
+        args = [
+            "$(rootpath //:dawnstar_resources)",
+            "--%s" % stage,
+        ],
+        data = ["//:dawnstar_resources"],
+        copts = CXX_COPTS,
+        size = "medium",
+        target_compatible_with = ["@platforms//os:windows"],
+        tags = [
+            "manual",
+            "no-remote",
+            "no-remote-cache",
+            "no-remote-exec",
+            "requires-private-data",
+        ],
+        visibility = ["//:__pkg__"],
+        deps = [
+            ":bot",
+            ":dawnstar_converted",
+            "//src/common/host:game_host",
+            "//src/common/platform:desktop",
+            "//src/common/render:render",
+        ],
+    )
+    for stage in [
+        "deduce",
+        "clear",
+        "beat",
+    ]
+]

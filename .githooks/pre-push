@@ -1,0 +1,47 @@
+#!/bin/sh
+# Everything, run before anything leaves the machine.
+#
+# This is the last point where a broken baseline is still a local problem.
+#
+# It no longer differs from the commit hook in *what* it runs: the frame tests
+# moved into //:test_quick once Phase 2 made them cheap, and //:test_private now
+# holds the same set. What differs is when -- these run against whatever state
+# the push is actually sending, rather than against the state each individual
+# commit was made in, which is what catches a series that only breaks in the
+# middle.
+#
+# Install with:  git config core.hooksPath .githooks
+# Bypass once:   git push --no-verify
+
+set -e
+
+BAZEL="${BAZEL:-bazelisk}"
+if ! command -v "$BAZEL" >/dev/null 2>&1; then
+    BAZEL=bazel
+fi
+if ! command -v "$BAZEL" >/dev/null 2>&1; then
+    echo "pre-push: no bazelisk or bazel on PATH -- nothing can be verified." >&2
+    echo "  Install Bazelisk, or set BAZEL to your bazel binary." >&2
+    echo "  To bypass (unverified): git push --no-verify" >&2
+    exit 1
+fi
+
+echo "pre-push: //:test_fast"
+"$BAZEL" test //:test_fast --enable_runfiles --test_output=errors
+
+# Mandatory, for the reason given in .githooks/pre-commit: without the games
+# there is nothing to check behaviour against, and this is the last point where
+# a broken baseline is still a local problem.
+if [ ! -d artifacts/private/jars ] || ! ls artifacts/private/jars/*.jar >/dev/null 2>&1; then
+    echo "pre-push: no JARs in artifacts/private/jars." >&2
+    echo "" >&2
+    echo "  Every golden test reads the real games, including the rendered-frame" >&2
+    echo "  comparison. Pushing from here would send code no baseline has seen." >&2
+    echo "" >&2
+    echo "  Hashes are pinned in validation/private/game-jars.sha256." >&2
+    echo "  To push anyway (unverified): git push --no-verify" >&2
+    exit 1
+fi
+
+echo "pre-push: //:test_private (~2s)"
+"$BAZEL" test //:test_private --enable_runfiles --test_output=errors

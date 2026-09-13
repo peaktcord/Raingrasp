@@ -1,0 +1,138 @@
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("//bazel:copts.bzl", "CXX_COPTS")
+
+package(default_visibility = ["//visibility:private"])
+
+cc_library(
+    name = "render",
+    srcs = [
+        "frame_check.cpp",
+        "render.cpp",
+    ],
+    hdrs = [
+        "frame_check.hpp",
+        "render.hpp",
+        "s60font.hpp",
+    ],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/common/replay:__pkg__",
+        "//src/common/sdl:__pkg__",
+        "//src/dawnstar:__pkg__",
+        "//src/dawnstar:__subpackages__",
+        "//src/stormhold:__pkg__",
+        "//src/stormhold:__subpackages__",
+    ],
+    deps = [
+        "//src/common:runtime",
+        "//tools/3p:stb_headers",
+    ],
+)
+
+# The sprite seam: one interface over the two games' entity art. See
+# sprite.hpp and `sprite-pipeline` in docs/DIVERGENCES.md.
+cc_library(
+    name = "sprite",
+    hdrs = ["sprite.hpp"],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/common/game:__pkg__",
+        "//src/dawnstar:__pkg__",
+        "//src/dawnstar:__subpackages__",
+        "//src/stormhold:__pkg__",
+        "//src/stormhold:__subpackages__",
+    ],
+    deps = ["//src/common:runtime"],
+)
+
+cc_library(
+    name = "minimap",
+    srcs = ["minimap.cpp"],
+    hdrs = ["minimap.hpp"],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/common/game:__pkg__",
+        "//src/dawnstar:__pkg__",
+        "//src/dawnstar:__subpackages__",
+        "//src/stormhold:__pkg__",
+        "//src/stormhold:__subpackages__",
+    ],
+    deps = ["//src/common:runtime"],
+)
+
+cc_library(
+    name = "map_atlas",
+    srcs = ["map_atlas.cpp"],
+    hdrs = ["map_atlas.hpp"],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/common/sdl:__pkg__",
+        "//src/dawnstar:__subpackages__",
+        "//src/stormhold:__subpackages__",
+    ],
+    deps = [":render"],
+)
+
+cc_library(
+    name = "widescreen",
+    srcs = ["widescreen.cpp"],
+    hdrs = ["widescreen.hpp"],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/common/sdl:__pkg__",
+        "//src/dawnstar:__subpackages__",
+        "//src/stormhold:__subpackages__",
+    ],
+    deps = [":render"],
+)
+
+cc_library(
+    name = "raycast",
+    srcs = ["raycast.cpp"],
+    hdrs = ["raycast.hpp"],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/common/sdl:__pkg__",
+        "//src/dawnstar:__subpackages__",
+        "//src/stormhold:__subpackages__",
+    ],
+    deps = [":render"],
+)
+
+# A paint that throws must not leave the frame lock held.  The lock is not
+# recursive, so a leak turned the next paint into resource_deadlock_would_occur
+# thrown from inside the error handler, which killed the process.
+cc_test(
+    name = "paint_lock_test",
+    srcs = ["paint_lock_test.cpp"],
+    copts = CXX_COPTS,
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//:__pkg__"],
+    deps = [
+        ":render",
+        "//src/common:runtime",
+    ],
+)
+
+# A frame that throws must leave the game recoverable: the tick reports the
+# original failure and the next frame still paints.
+cc_test(
+    name = "paint_recovery_test",
+    srcs = ["paint_recovery_test.cpp"],
+    copts = CXX_COPTS,
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//:__pkg__"],
+    deps = [
+        ":render",
+        "//src/common:runtime",
+    ],
+)

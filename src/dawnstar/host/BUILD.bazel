@@ -1,0 +1,25 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("//bazel:copts.bzl", "CXX_COPTS")
+
+package(default_visibility = ["//visibility:private"])
+
+# Dawnstar behind the host seam: the game, its scene adapters and its
+# shortcut adapter, driven through common/host/game_host.hpp.
+cc_library(
+    name = "host",
+    srcs = ["host.cpp"],
+    hdrs = ["host.hpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//src/common/host:__pkg__"],
+    deps = [
+        "//src/common/game:data",
+        "//src/common/host:game_host",
+        "//src/common:runtime",
+        "//src/common/platform:platform",
+        "//src/dawnstar:dawnstar_converted",
+        "//src/dawnstar/input:shortcut_host",
+        "//src/dawnstar/render:raycast_scene",
+        "//src/dawnstar/render:widescreen_scene",
+    ],
+)

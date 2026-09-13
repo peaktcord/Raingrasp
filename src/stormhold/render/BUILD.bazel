@@ -1,0 +1,110 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("//bazel:copts.bzl", "CXX_COPTS")
+
+package(default_visibility = ["//visibility:private"])
+
+# Every source here, for the registry check (tools/check_registry.py): the
+# scene adapters name what they implement.
+filegroup(
+    name = "all_sources",
+    srcs = glob([
+        "*.cpp",
+        "*.hpp",
+    ]),
+    visibility = ["//:__pkg__"],
+)
+
+cc_library(
+    name = "widescreen_scene",
+    srcs = ["widescreen_scene.cpp"],
+    hdrs = ["widescreen_scene.hpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = [
+        "//:__pkg__",
+        "//src/stormhold/host:__pkg__",
+    ],
+    deps = [
+        "//src/stormhold:stormhold_converted",
+        "//src/common/game:base",
+        "//src/common/render:widescreen",
+    ],
+)
+
+CAPTURE_DEPS = [
+    ":raycast_scene",
+    ":widescreen_scene",
+    "//src/common/platform:desktop",
+    "//src/common/render:render",
+    "//src/stormhold:stormhold_converted",
+    "//src/stormhold/input:shortcut_host",
+]
+
+cc_binary(
+    name = "stormhold_capture",
+    srcs = ["capture_frames.cpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//:__pkg__"],
+    deps = CAPTURE_DEPS,
+)
+
+cc_binary(
+    name = "stormhold_maps",
+    srcs = ["map_dump.cpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//:__pkg__"],
+    deps = [
+        "//src/common/platform:desktop",
+        "//src/common/render:map_atlas",
+        "//src/stormhold:stormhold_converted",
+    ],
+)
+
+cc_test(
+    name = "stormhold_frame_test",
+    srcs = ["capture_frames.cpp"],
+    args = [
+        "$(rootpath //:stormhold_resources)",
+        "$${TEST_TMPDIR}",
+        "$${TEST_TMPDIR}/rms",
+        "--verify",
+        "verify/frames-stormhold",
+    ],
+    data = [
+        "//:stormhold_frame_references",
+        "//:stormhold_resources",
+    ],
+    copts = CXX_COPTS,
+    size = "medium",
+    target_compatible_with = ["@platforms//os:windows"],
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+    visibility = ["//:__pkg__"],
+    deps = CAPTURE_DEPS,
+)
+
+cc_library(
+    name = "raycast_scene",
+    srcs = ["raycast_scene.cpp"],
+    hdrs = ["raycast_scene.hpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = [
+        "//:__pkg__",
+        "//src/stormhold/host:__pkg__",
+    ],
+    deps = [
+        "//src/stormhold:stormhold_converted",
+        "//src/common/game:base",
+        "//src/common/render:raycast",
+    ],
+)

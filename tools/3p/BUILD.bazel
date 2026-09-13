@@ -1,0 +1,17 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:private"])
+
+exports_files(
+    ["STB-LICENSE.txt"],
+    visibility = ["//:__pkg__"],
+)
+
+cc_library(
+    name = "stb_headers",
+    hdrs = [
+        "stb_image.h",
+        "stb_image_write.h",
+    ],
+    visibility = ["//src/common/render:__pkg__"],
+)

@@ -1,0 +1,9 @@
+exports_files([
+    "capture_tool_output.py",
+    "file_sha256.py",
+    "intake.py",
+    "jar_entries.py",
+    "jar_inventory.py",
+    "package_game.py",
+    "write_version.py",
+])

@@ -1,0 +1,72 @@
+#!/bin/sh
+# Fast checks, run on every commit.
+#
+# //:test_fast needs nothing but the checkout (~4s after a real code change).
+# //:test_quick needs the private JARs and covers everything: the menu, dungeon
+# and pure-surface tests, the replay hashes, the input sentinels, and the
+# byte-exact frames (~2s for all 19).
+#
+# The two frame tests used to be excluded: ~80s of the ~85s total, nearly all of
+# it the capture harness sleeping, because the game painted on its own thread
+# and there was no way to ask whether a keypress had landed. Phase 2 fixed that
+# -- the harness drives tick() itself, so the waits are tick counts and a
+# returned tick *is* a finished frame. They now run in ~0.9s combined and are
+# part of //:test_quick, so pixels are checked on every commit.
+#
+# Both suites below are mandatory. The JARs are not optional equipment for this
+# project -- see the check further down.
+#
+# Install with:  git config core.hooksPath .githooks
+# Bypass once:   git commit --no-verify
+
+set -e
+
+BAZEL="${BAZEL:-bazelisk}"
+if ! command -v "$BAZEL" >/dev/null 2>&1; then
+    BAZEL=bazel
+fi
+if ! command -v "$BAZEL" >/dev/null 2>&1; then
+    echo "pre-commit: no bazelisk or bazel on PATH -- nothing can be verified." >&2
+    echo "  Install Bazelisk, or set BAZEL to your bazel binary." >&2
+    echo "  To bypass (unverified): git commit --no-verify" >&2
+    exit 1
+fi
+
+# The SDL front-ends are in no test suite (they need a display), so nothing
+# would notice them failing to compile -- which is exactly how stormhold_sdl
+# stayed broken through a rename. Building them is cheap; not building them
+# cost a silent breakage.
+echo "pre-commit: //:buildable"
+"$BAZEL" build //:buildable
+
+echo "pre-commit: //:test_fast"
+"$BAZEL" test //:test_fast --enable_runfiles --test_output=errors
+
+# The private suites need the game JARs, which are not in the repository -- but
+# they are not optional either. Every baseline in this project is measured
+# against the real games, so a checkout without them cannot check that a change
+# preserved behaviour, which is the only thing these hooks are for. Refuse the
+# commit rather than passing a subset: a green run that verified nothing is
+# worse than a red one.
+#
+# Bazel says the same thing on its own (//:dawnstar_resources fails analysis
+# with "not among the verified jars"), but it never gets the chance if the hook
+# skips first. This check exists to give the clearer message, not to soften it.
+if [ ! -d artifacts/private/jars ] || ! ls artifacts/private/jars/*.jar >/dev/null 2>&1; then
+    echo "pre-commit: no JARs in artifacts/private/jars." >&2
+    echo "" >&2
+    echo "  The golden tests -- menu, dungeon, pure surface, save, monsters," >&2
+    echo "  player, sentinels -- all read the real games. Without them nothing" >&2
+    echo "  here can tell whether this commit changed behaviour." >&2
+    echo "" >&2
+    echo "  Supply your own copies of:" >&2
+    echo "    tes-travels-dawnstar-1.0.0.jar" >&2
+    echo "    tes-travels-stormhold-1.0.10.jar" >&2
+    echo "  Hashes are pinned in validation/private/game-jars.sha256." >&2
+    echo "" >&2
+    echo "  To commit anyway (it will not be verified): git commit --no-verify" >&2
+    exit 1
+fi
+
+echo "pre-commit: //:test_quick"
+"$BAZEL" test //:test_quick --enable_runfiles --test_output=errors

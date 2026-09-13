@@ -1,0 +1,1589 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@rules_decomp//decomp:sentinel.bzl", "sentinel_test")
+load("@rules_decomp//decomp:verified_inputs.bzl", "verified_files")
+load("//bazel:copts.bzl", "CXX_COPTS")
+load("//bazel:game_package.bzl", "game_package")
+load("//bazel:jar_resources.bzl", "jar_resources")
+load("//bazel:private_files_report.bzl", "private_files_report")
+load("//bazel:private_tool_output.bzl", "file_sha256", "private_tool_output", "resource_tool_output")
+load("//bazel:python_check_test.bzl", "python_check_test")
+load("//bazel:python_tool_test.bzl", "python_tool_test")
+
+package(default_visibility = ["//visibility:private"])
+
+exports_files(
+    [
+        "validation/sentinels/dawnstar-replay.sha256",
+        "validation/sentinels/stormhold-replay.sha256",
+    ],
+    visibility = [
+        "//:__pkg__",
+        "//src/common/replay:__pkg__",
+    ],
+)
+
+exports_files(
+    [
+        "validation/sentinels/dawnstar-dungeons.sha256",
+        "validation/sentinels/dawnstar-menu.sha256",
+        "validation/sentinels/dawnstar-monsters.sha256",
+        "validation/sentinels/dawnstar-player.sha256",
+        "validation/sentinels/dawnstar-pure-surface.sha256",
+        "validation/sentinels/dawnstar-save.sha256",
+        "validation/sentinels/dawnstar-visibility.sha256",
+    ],
+    visibility = [
+        "//:__pkg__",
+        "//src/dawnstar:__pkg__",
+    ],
+)
+
+exports_files(
+    [
+        "validation/sentinels/stormhold-dungeons.sha256",
+        "validation/sentinels/stormhold-menu.sha256",
+        "validation/sentinels/stormhold-monsters.sha256",
+        "validation/sentinels/stormhold-player.sha256",
+        "validation/sentinels/stormhold-save.sha256",
+        "validation/sentinels/stormhold-visibility.sha256",
+    ],
+    visibility = [
+        "//:__pkg__",
+        "//src/stormhold:__pkg__",
+    ],
+)
+
+filegroup(
+    name = "dawnstar_frame_references",
+    srcs = glob(["verify/frames-dawnstar/*.png"], allow_empty = True),
+    visibility = ["//src/dawnstar/render:__pkg__"],
+)
+
+filegroup(
+    name = "stormhold_frame_references",
+    srcs = glob(["verify/frames-stormhold/*.png"], allow_empty = True),
+    visibility = ["//src/stormhold/render:__pkg__"],
+)
+
+# Compiler flags, by toolchain. MSVC is what this has always built with; the
+# GCC/Clang arm is what an Emscripten build needs, and having it here is the
+# difference between "not ported yet" and "the build actively prevents it".
+#
+# Nothing targets wasm yet. Portable common libraries no longer inherit a
+# Windows constraint; the translated kernels and desktop hosts remain
+# Windows-only until their own portability work lands.
+COPTS = CXX_COPTS
+
+cc_binary(
+    name = "dat_parser",
+    srcs = ["tools/dat_parser.c"],
+    copts = ["/W4"],
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+cc_library(
+    name = "dat_parser_test_source",
+    textual_hdrs = ["tools/dat_parser.c"],
+)
+
+cc_test(
+    name = "dat_parser_unit_test",
+    srcs = ["tests/dat_parser_unit_test.c"],
+    deps = [":dat_parser_test_source"],
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+cc_test(
+    name = "progress_dialog_test",
+    srcs = ["tests/progress_dialog_test.cpp"],
+    copts = COPTS,
+    deps = [
+        ":runtime_support",
+        ":render",
+        "//src/common/game:ui",
+    ],
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+alias(
+    name = "replay",
+    actual = "//src/common/replay:replay",
+    visibility = ["//:__pkg__"],
+)
+
+alias(
+    name = "replay_cli",
+    actual = "//src/common/replay:cli",
+    visibility = ["//:__pkg__"],
+)
+
+alias(
+    name = "visibility_harness",
+    actual = "//src/common/replay:visibility_harness",
+    visibility = ["//:__pkg__"],
+)
+
+alias(
+    name = "data_harness",
+    actual = "//src/common/replay:data_harness",
+    visibility = ["//:__pkg__"],
+)
+
+alias(
+    name = "menu_harness",
+    actual = "//src/common/replay:menu_harness",
+    visibility = ["//:__pkg__"],
+)
+
+alias(
+    name = "monster_harness",
+    actual = "//src/common/replay:monster_harness",
+    visibility = ["//:__pkg__"],
+)
+
+alias(
+    name = "player_harness",
+    actual = "//src/common/replay:player_harness",
+    visibility = ["//:__pkg__"],
+)
+
+cc_test(
+    name = "clock_unit_test",
+    srcs = ["tests/clock_unit_test.cpp"],
+    copts = COPTS,
+    deps = [":runtime_support"],
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+cc_test(
+    name = "game_session_unit_test",
+    srcs = ["tests/game_session_unit_test.cpp"],
+    copts = COPTS,
+    deps = [
+        "//src/common/game:base",
+        "//src/common/platform:platform",
+    ],
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+# Layer 4: the two games driven through one script, differing only where
+# declared. Reads replay artifacts generated from the verified JAR resources,
+# so it compares the live translated games rather than committed test data.
+cc_test(
+    name = "cross_game_equivalence_test",
+    srcs = ["tests/cross_game_equivalence_test.cpp"],
+    args = [
+        "$(rootpath //src/common/replay:dawnstar_replay_output)",
+        "$(rootpath //src/common/replay:stormhold_replay_output)",
+    ],
+    data = [
+        "//src/common/replay:dawnstar_replay_output",
+        "//src/common/replay:stormhold_replay_output",
+    ],
+    copts = COPTS,
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+)
+
+cc_test(
+    name = "replay_unit_test",
+    srcs = ["tests/replay_unit_test.cpp"],
+    copts = COPTS,
+    deps = [
+        ":runtime_support",
+        ":replay",
+    ],
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+# DEFLATE and the zip reader, against fixtures produced by an independent
+# implementation (Python's zlib) and against hand-built archives whose every
+# offset is known. Sealed. Its companion inflate_jar_test runs the same decoder
+# over the user's real JARs.
+cc_test(
+    name = "inflate_unit_test",
+    srcs = ["tests/inflate_unit_test.cpp"],
+    copts = COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [":inflate"],
+)
+
+# Runs the vendored inflater over a real JAR and digests every entry, so the
+# decoder can be checked against a trusted implementation on the actual archives
+# rather than only on hand-picked streams. Private: it needs the user's JARs.
+cc_binary(
+    name = "inflate_jar_dump",
+    srcs = ["tests/inflate_jar_dump.cpp"],
+    copts = COPTS,
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [":inflate"],
+)
+
+# The same decoder, over the user's real archives. Bazel generates the expected
+# report from Python's zipfile, so this checks an independent implementation
+# without committing an inventory of proprietary archive contents.
+cc_test(
+    name = "inflate_jar_test",
+    srcs = ["tests/inflate_jar_dump.cpp"],
+    args = [
+        "$(rootpath artifacts/private/jars/tes-travels-dawnstar-1.0.0.jar)",
+        "$(rootpath artifacts/private/jars/tes-travels-stormhold-1.0.10.jar)",
+        "--check",
+        "$(rootpath :jar_entries_expected)",
+    ],
+    data = [
+        "artifacts/private/jars/tes-travels-dawnstar-1.0.0.jar",
+        "artifacts/private/jars/tes-travels-stormhold-1.0.10.jar",
+        ":jar_entries_expected",
+    ],
+    copts = COPTS,
+    size = "small",
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [":inflate"],
+)
+
+# A command-line front door to native intake, so the C++ unpacker can be run
+# from a script and diffed against bazel/intake.py's tree.
+cc_binary(
+    name = "intake_native_dump",
+    srcs = ["tests/intake_native_dump.cpp"],
+    copts = COPTS,
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [":platform_intake"],
+)
+
+# The two unpackers must produce the same tree, because either one's output is
+# read by the same runtime. This already caught a real divergence: the native
+# side lowercased .lmp member names, which is invisible on Windows and would
+# have lost three case-sensitively-named images under wasm.
+python_tool_test(
+    name = "intake_parity_test",
+    script = "tests/intake_parity_test.py",
+    tool = ":intake_native_dump",
+    args_files = [
+        "//bazel:intake.py",
+        "artifacts/private/jars/tes-travels-dawnstar-1.0.0.jar",
+        "artifacts/private/jars/tes-travels-stormhold-1.0.10.jar",
+    ],
+    size = "small",
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+# Native intake against the user's real JARs: identification, unpacking, and
+# the resolution precedence. Private, because the question is whether a player's
+# own file produces a tree the game can boot from -- which synthesised archives
+# cannot answer. bazel/intake.py's rules are covered separately and sealed by
+# intake_test; the two implementations must agree, since either one's tree is
+# read by the same runtime.
+cc_test(
+    name = "intake_native_test",
+    srcs = ["tests/intake_native_test.cpp"],
+    args = [
+        "$(rootpath artifacts/private/jars/tes-travels-dawnstar-1.0.0.jar)",
+        "$(rootpath artifacts/private/jars/tes-travels-stormhold-1.0.10.jar)",
+    ],
+    data = [
+        "artifacts/private/jars/tes-travels-dawnstar-1.0.0.jar",
+        "artifacts/private/jars/tes-travels-stormhold-1.0.10.jar",
+    ],
+    copts = COPTS,
+    size = "small",
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [":platform_intake"],
+)
+
+# The VFS guarantees: normalisation, layer precedence and the .lmp reader.
+# Sealed -- it builds its archives in memory, so it needs neither the private
+# JARs nor a filesystem, and it covers the two failure modes no game baseline
+# can (a name that resolves on one platform's casing rules but not the other's,
+# and an override that silently loses to the layer beneath it).
+# The Display & Controls defaults and the handset preset. `hold-to-move` is
+# the row that starts off.
+cc_test(
+    name = "port_options_test",
+    srcs = ["tests/port_options_test.cpp"],
+    copts = COPTS,
+    deps = ["//src/common/platform:platform"],
+)
+
+cc_test(
+    name = "vfs_unit_test",
+    srcs = ["tests/vfs_unit_test.cpp"],
+    copts = COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        ":platform",
+        ":platform_desktop",
+    ],
+)
+
+# `single-save-slot`: the save store replaces a save atomically. There is one
+# slot per game now, so an interrupted write has no older sibling to fall back
+# on -- the temp-and-rename in DirectorySaveStore::save is the only thing
+# keeping a half-written save from destroying a good one, and this pins it.
+cc_test(
+    name = "atomic_save_test",
+    srcs = ["tests/atomic_save_check.cpp"],
+    copts = COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        ":platform",
+        ":platform_desktop",
+        "//src/common:runtime",
+    ],
+)
+
+# The shared monster table lookups and save record, swept rather than sampled.
+# Sealed: the table is synthetic, so every type and column is reachable without
+# the private JARs -- which is the payoff of the extraction, since these were
+# previously exercised only through whichever types a dungeon walk happened to
+# touch.
+cc_test(
+    name = "monsterdata_unit_test",
+    srcs = ["tests/monsterdata_unit_test.cpp"],
+    copts = COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = ["//src/common/game:data"],
+)
+
+# The shared combat arithmetic, swept rather than sampled. Sealed: the item
+# table is synthetic, so every weapon and cuirass category, every armour slot
+# and every spell effect is reachable without the private JARs -- which is the
+# payoff of the extraction, since these were previously exercised only through
+# whichever equipment a scripted play-through happened to hold.
+# Vitals clamping and spell-timer state, swept rather than sampled. Sealed:
+# both arrays are constructed by the test, so every spell slot, every sentinel
+# and every cur/max pairing is reachable without the private JARs. The pairing
+# sweep is the point -- a current vital clamped against the wrong maximum is
+# invisible on a fresh character, where cur and max are equal by construction.
+# The inventory, swept on its post-conditions rather than its returns. Sealed:
+# the item table and the three parallel arrays are all built by the test.
+# These functions mutate storage the save format depends on, so a right return
+# value with wrong arrays would corrupt the next save -- every mutation is
+# checked by inspecting the arrays, against a whole-bag invariant.
+# The batched small helpers. Sealed: the spell table and both byte streams are
+# built by the test. isWalkable's domain is one byte, so it is swept
+# exhaustively rather than sampled; describeSpell's newline placement is
+# checked as a contract, since the caller splits on it to lay out the screen.
+cc_test(
+    name = "menuwidget_unit_test",
+    srcs = ["tests/menuwidget_unit_test.cpp"],
+    copts = COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = ["//src/common/game:ui"],
+)
+
+cc_test(
+    name = "textbox_rewrap_test",
+    srcs = ["tests/textbox_rewrap_test.cpp"],
+    copts = COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = ["//src/common/game:ui"],
+)
+
+cc_test(
+    name = "menu_shortcuts_test",
+    srcs = ["tests/menu_shortcuts_test.cpp"],
+    copts = COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [":menu_shortcuts"],
+)
+
+cc_test(
+    name = "smallhelpers_unit_test",
+    srcs = ["tests/smallhelpers_unit_test.cpp"],
+    copts = COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "//src/common/game:combat",
+        "//src/common/game:data",
+    ],
+)
+
+cc_test(
+    name = "inventory_unit_test",
+    srcs = ["tests/inventory_unit_test.cpp"],
+    copts = COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = ["//src/common/game:combat"],
+)
+
+cc_test(
+    name = "melee_unit_test",
+    srcs = ["tests/melee_unit_test.cpp"],
+    copts = COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = ["//src/common/game:combat"],
+)
+
+cc_test(
+    name = "spellcast_unit_test",
+    srcs = ["tests/spellcast_unit_test.cpp"],
+    copts = COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = ["//src/common/game:combat"],
+)
+
+cc_test(
+    name = "progression_unit_test",
+    srcs = ["tests/progression_unit_test.cpp"],
+    copts = COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = ["//src/common/game:combat"],
+)
+
+cc_test(
+    name = "vitals_unit_test",
+    srcs = ["tests/vitals_unit_test.cpp"],
+    copts = COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = ["//src/common/game:combat"],
+)
+
+cc_test(
+    name = "combatstats_unit_test",
+    srcs = ["tests/combatstats_unit_test.cpp"],
+    copts = COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = ["//src/common/game:combat"],
+)
+
+cc_test(
+    name = "formulas_unit_test",
+    srcs = ["tests/formulas_unit_test.cpp"],
+    copts = COPTS,
+    deps = [
+        ":runtime_support",
+        "//src/common/game:combat",
+    ],
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+
+# ------------------------------------------------------------------- shared
+#
+# One shared runtime and one rasterizer serve both ports; only the transliterated game
+# classes and the front-ends that reach into them are per-game.
+
+# Transitional aliases keep the established root labels stable while consumers
+# move into their own packages. They are root-private so new packages must name
+# the real boundary instead of extending the old public root API.
+alias(
+    name = "platform",
+    actual = "//src/common/platform:platform",
+    visibility = ["//:__pkg__"],
+)
+
+alias(
+    name = "inflate",
+    actual = "//src/common/platform:inflate",
+    visibility = ["//:__pkg__"],
+)
+
+alias(
+    name = "platform_desktop",
+    actual = "//src/common/platform:desktop",
+    visibility = ["//:__pkg__"],
+)
+
+alias(
+    name = "platform_intake",
+    actual = "//src/common/platform:intake",
+    visibility = ["//:__pkg__"],
+)
+
+alias(
+    name = "runtime_support",
+    actual = "//src/common:runtime",
+    visibility = ["//:__pkg__"],
+)
+
+alias(
+    name = "minimap",
+    actual = "//src/common/render:minimap",
+    visibility = ["//:__pkg__"],
+)
+
+# Software rasterizer implementing MIDP Graphics and Nokia DirectGraphics. The
+# games paint from their own threads, so frames are built on the CPU and handed
+# to SDL to present; this also keeps the renderer testable without a display.
+alias(
+    name = "render",
+    actual = "//src/common/render:render",
+    visibility = ["//:__pkg__"],
+)
+
+# Widescreen dungeon view. Knows neither game: each supplies a Scene describing
+# its art and what is beside the player (see <game>/render/widescreen_scene).
+# Top-down dungeon maps: one per dungeon, plus every dungeon stitched together
+# at the offsets their geometry tables imply.
+alias(
+    name = "map_atlas",
+    actual = "//src/common/render:map_atlas",
+    visibility = ["//:__pkg__"],
+)
+
+alias(
+    name = "widescreen",
+    actual = "//src/common/render:widescreen",
+    visibility = ["//:__pkg__"],
+)
+
+# Real 3D dungeon view, drawn with a camera measured from the original wall art.
+alias(
+    name = "raycast",
+    actual = "//src/common/render:raycast",
+    visibility = ["//:__pkg__"],
+)
+
+alias(
+    name = "menu_shortcuts",
+    actual = "//src/common/input:menu_shortcuts",
+    visibility = ["//:__pkg__"],
+)
+
+DAWNSTAR_COPTS = COPTS
+
+alias(
+    name = "dawnstar_converted",
+    actual = "//src/dawnstar:dawnstar_converted",
+)
+
+# Playable front-end: SDL3 owns the window, input, and presentation only.
+alias(
+    name = "dawnstar_widescreen_scene",
+    actual = "//src/dawnstar/render:widescreen_scene",
+)
+
+alias(
+    name = "dawnstar_raycast_scene",
+    actual = "//src/dawnstar/render:raycast_scene",
+)
+
+alias(
+    name = "dawnstar_shortcut_host",
+    actual = "//src/dawnstar/input:shortcut_host",
+)
+
+# One window, one smoke driver and one replay probe for both games; the game
+# is chosen at runtime through the host seam (src/common/host).
+alias(
+    name = "raingrasp",
+    actual = "//src/common/sdl:raingrasp",
+)
+
+alias(
+    name = "raingrasp_smoke",
+    actual = "//src/common/host:raingrasp_smoke",
+)
+
+# Layer 3: a scripted play-through, hashed every tick. Threadless -- boot runs
+# through the helper-job seam and the canvas through tick() -- so the same
+# script always produces the same hashes.
+alias(
+    name = "raingrasp_replay",
+    actual = "//src/common/replay:raingrasp_replay",
+)
+
+test_suite(
+    name = "dawnstar_replay_test",
+    tests = ["//src/common/replay:dawnstar_replay_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+# Renders the same frames without SDL and writes them as PNGs.
+alias(
+    name = "dawnstar_capture",
+    actual = "//src/dawnstar/render:dawnstar_capture",
+)
+
+# Renders every dungeon as a top-down PNG with its monsters, chests, items and
+# NPCs.
+alias(
+    name = "dawnstar_data_dump",
+    actual = "//src/dawnstar:dawnstar_data_dump",
+)
+
+alias(
+    name = "dawnstar_maps",
+    actual = "//src/dawnstar/render:dawnstar_maps",
+)
+
+# Regenerates the pure-surface TSV. //:dawnstar_pure_surface_test checks its
+# digest; this exists for the rare case of re-deriving a row, which needs the
+# original consulted afresh -- see docs/DIVERGENCES.md.
+alias(
+    name = "dawnstar_oracle_dump",
+    actual = "//src/dawnstar:dawnstar_oracle_dump",
+)
+
+# ---------------------------------------------------------------- Stormhold
+#
+# The same conversion applied to Stormhold (v1.0.10). Runtime, render and SDL
+# are copies of Dawnstar's for now; the game classes are its own.
+
+STORMHOLD_COPTS = COPTS
+
+alias(
+    name = "stormhold_converted",
+    actual = "//src/stormhold:stormhold_converted",
+)
+
+alias(
+    name = "stormhold_widescreen_scene",
+    actual = "//src/stormhold/render:widescreen_scene",
+)
+
+alias(
+    name = "stormhold_raycast_scene",
+    actual = "//src/stormhold/render:raycast_scene",
+)
+
+alias(
+    name = "stormhold_shortcut_host",
+    actual = "//src/stormhold/input:shortcut_host",
+)
+
+alias(
+    name = "stormhold_data_dump",
+    actual = "//src/stormhold:stormhold_data_dump",
+)
+
+alias(
+    name = "stormhold_maps",
+    actual = "//src/stormhold/render:stormhold_maps",
+)
+
+# Layer 3: Stormhold's scripted play-through, hashed every tick.
+test_suite(
+    name = "stormhold_replay_test",
+    tests = ["//src/common/replay:stormhold_replay_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+alias(
+    name = "stormhold_capture",
+    actual = "//src/stormhold/render:stormhold_capture",
+)
+
+_stormhold_geomin = glob(
+    ["artifacts/decompiled/v1010/geomin.dat"],
+    allow_empty = True,
+)
+
+verified_files(
+    name = "verified_stormhold_geomin",
+    srcs = _stormhold_geomin,
+    manifest = "validation/private/stormhold-geomin.sha256",
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+_game_jars = glob(
+    ["artifacts/private/jars/*.jar"],
+    allow_empty = True,
+)
+
+verified_files(
+    name = "verified_game_jars",
+    srcs = _game_jars,
+    manifest = "validation/private/game-jars.sha256",
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+private_files_report(
+    name = "game_jars_inventory",
+    input = ":verified_game_jars",
+    reporter = "//bazel:jar_inventory.py",
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+private_files_report(
+    name = "jar_entries_expected",
+    input = ":verified_game_jars",
+    reporter = "//bazel:jar_entries.py",
+    include_names = [
+        "tes-travels-dawnstar-1.0.0.jar",
+        "tes-travels-stormhold-1.0.10.jar",
+    ],
+    output_extension = ".tsv",
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+private_tool_output(
+    name = "stormhold_geomin_dump",
+    input = ":verified_stormhold_geomin",
+    tool = ":dat_parser",
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+sentinel_test(
+    name = "stormhold_geomin_sentinel_test",
+    actual = ":stormhold_geomin_dump",
+    expected = "validation/sentinels/stormhold-geomin.txt",
+    size = "small",
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+)
+
+sentinel_test(
+    name = "game_jars_inventory_sentinel_test",
+    actual = ":game_jars_inventory",
+    expected = "validation/sentinels/game-jars-inventory.json",
+    size = "small",
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+)
+
+# Game resources, unpacked from the hash-pinned JARs.
+#
+# The games load their data at runtime the way the original application did:
+# a platform context points at a directory and resource reads open files under it. That
+# directory used to be produced by running unzip once by hand, and the golden
+# tests globbed whatever was there -- so verified_game_jars pinned the JARs but
+# nothing checked the resources actually read. Deriving them here closes that
+# gap: provenance now runs unbroken from the pinned hash to every golden file.
+jar_resources(
+    name = "dawnstar_resources",
+    jar = ":verified_game_jars",
+    jar_name = "tes-travels-dawnstar-1.0.0.jar",
+    variant = "dawnstar",
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+    visibility = [
+        "//:__pkg__",
+        "//src/dawnstar:__pkg__",
+        "//src/dawnstar/render:__pkg__",
+        "//src/common/replay:__pkg__",
+    ],
+)
+
+jar_resources(
+    name = "stormhold_resources",
+    jar = ":verified_game_jars",
+    jar_name = "tes-travels-stormhold-1.0.10.jar",
+    variant = "stormhold",
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+    visibility = [
+        "//:__pkg__",
+        "//src/stormhold:__pkg__",
+        "//src/stormhold/render:__pkg__",
+        "//src/common/replay:__pkg__",
+    ],
+)
+
+# Capture the data-dump CLIs as declared artifacts over resource trees derived
+# from the verified game JARs. The tests below compare their SHA-256 digests.
+resource_tool_output(
+    name = "dawnstar_data_output",
+    resources = ":dawnstar_resources",
+    tool = ":dawnstar_data_dump",
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+file_sha256(
+    name = "dawnstar_data_digest",
+    src = ":dawnstar_data_output",
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+resource_tool_output(
+    name = "stormhold_data_output",
+    resources = ":stormhold_resources",
+    tool = ":stormhold_data_dump",
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+file_sha256(
+    name = "stormhold_data_digest",
+    src = ":stormhold_data_output",
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+sentinel_test(
+    name = "dawnstar_data_test",
+    actual = ":dawnstar_data_digest",
+    expected = "validation/sentinels/dawnstar-data.sha256",
+    size = "small",
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+)
+
+sentinel_test(
+    name = "stormhold_data_test",
+    actual = ":stormhold_data_digest",
+    expected = "validation/sentinels/stormhold-data.sha256",
+    size = "small",
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+)
+
+test_suite(
+    name = "test_data",
+    tests = [
+        ":dawnstar_data_test",
+        ":stormhold_data_test",
+    ],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+# The pure surface: everything a desktop JVM could execute out of the original
+# Dawnstar bytecode -- GameRandom streams, lingoRandomInt, the big-endian long
+# decode, every GameUtil bit/flag helper, coordinate keys, string substitution,
+# and the constant tables of a/c/e/i/j/k.
+#
+# The expected digest in validation/sentinels/dawnstar-pure-surface.sha256 was
+# produced from the real JAR by tools/oracle/dump_pure_surface.js running under
+# jjs. That tooling is gone -- it needed a JVM, the private JARs, and a jjs that
+# has not shipped with a JDK since 15 -- but its answers are committed, so this
+# still checks the port against the game as shipped rather than against itself.
+# It is the only test here that does.
+#
+# Needs the extracted resources (init_statics reads them), hence private.
+test_suite(
+    name = "dawnstar_pure_surface_test",
+    tests = ["//src/dawnstar:dawnstar_pure_surface_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+
+test_suite(
+    name = "dawnstar_menu_test",
+    tests = ["//src/dawnstar:dawnstar_menu_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+alias(
+    name = "dawnstar_menu_dump",
+    actual = "//src/dawnstar:dawnstar_menu_dump",
+)
+
+test_suite(
+    name = "stormhold_menu_test",
+    tests = ["//src/stormhold:stormhold_menu_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+alias(
+    name = "stormhold_menu_dump",
+    actual = "//src/stormhold:stormhold_menu_dump",
+)
+
+test_suite(
+    name = "test_menu",
+    tests = [
+        ":dawnstar_menu_test",
+        ":stormhold_menu_test",
+    ],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+# Runnable folders: the exe, the DLLs beside it, and the docs, in one place.
+#
+# `bazel build //:dist` puts both under bazel-bin/, ready to copy or zip. This
+# replaces assembling them by hand, which is how CONTROLS.txt ended up living
+# only in an untracked dist/ and in no commit.
+game_package(
+    name = "raingrasp_dist",
+    binary = ":raingrasp",
+    package_dir = "raingrasp",
+    docs = [
+        "COPYING",
+        "THIRD_PARTY_NOTICES.md",
+        "//src/common/sdl:CONTROLS.txt",
+        "//tools/3p:STB-LICENSE.txt",
+        "@decomp_sdl3//:license",
+    ],
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+filegroup(
+    name = "dist",
+    srcs = [":raingrasp_dist"],
+)
+
+# Everything that must at least compile.
+#
+# The SDL front-ends are not in any test suite -- they need a display -- so
+# nothing was building them, and stormhold_sdl silently stopped compiling when
+# Phase 1 renamed ESGame::av_ to gameCanvas_ everywhere except there. A
+# build-only target is the cheap fix: `bazel build //:buildable`.
+filegroup(
+    name = "buildable",
+    srcs = [
+        ":raingrasp_replay",
+        ":raingrasp",
+        ":raingrasp_smoke",
+    ],
+)
+
+test_suite(
+    name = "test_fast",
+    tests = [
+        ":commandflow_unit_test",
+        ":clock_unit_test",
+        ":dat_parser_unit_test",
+        ":formulas_unit_test",
+        ":game_session_unit_test",
+        ":replay_unit_test",
+        ":progress_dialog_test",
+        ":render_context_unit_test",
+        ":vfs_unit_test",
+        ":atomic_save_test",
+        ":port_options_test",
+        ":intake_test",
+        ":inflate_unit_test",
+        ":paint_once_test",
+        ":combatstats_unit_test",
+        ":inventory_unit_test",
+        ":menuwidget_unit_test",
+        ":textbox_rewrap_test",
+        ":menu_shortcuts_test",
+        ":smallhelpers_unit_test",
+        ":melee_unit_test",
+        ":progression_unit_test",
+        ":spellcast_unit_test",
+        ":vitals_unit_test",
+        ":monsterdata_unit_test",
+        "//src/dawnstar:world_state_test",
+        "//src/stormhold:world_state_test",
+    ],
+)
+
+cc_test(
+    name = "render_context_unit_test",
+    srcs = ["tests/render_context_unit_test.cpp"],
+    copts = CXX_COPTS,
+    deps = [
+        "//src/common/render:raycast",
+        "//src/common/render:render",
+        "//src/common/render:widescreen",
+    ],
+)
+
+test_suite(
+    name = "test_quick",
+    tests = [
+        ":dawnstar_command_flow_test",
+        ":stormhold_command_flow_test",
+        ":dawnstar_form_overlay_test",
+        ":stormhold_form_overlay_test",
+        ":dawnstar_wide_toggle_test",
+        ":stormhold_wide_toggle_test",
+        ":dawnstar_port_options_keys_test",
+        ":stormhold_port_options_keys_test",
+        ":dawnstar_data_test",
+        ":dawnstar_menu_test",
+        ":dawnstar_save_test",
+        ":stormhold_save_test",
+        ":dawnstar_visibility_test",
+        ":stormhold_visibility_test",
+        ":dawnstar_frame_test",
+        ":dawnstar_replay_test",
+        ":stormhold_frame_test",
+        ":stormhold_replay_test",
+        ":cross_game_equivalence_test",
+        ":dawnstar_monster_test",
+        ":stormhold_monster_test",
+        ":dawnstar_player_test",
+        ":stormhold_player_test",
+        ":stormhold_data_test",
+        ":stormhold_menu_test",
+        ":dawnstar_dungeon_test",
+        ":stormhold_dungeon_test",
+        ":dawnstar_pure_surface_test",
+        ":game_jars_inventory_sentinel_test",
+        ":stormhold_geomin_sentinel_test",
+        ":inflate_jar_test",
+        ":intake_native_test",
+        ":intake_parity_test",
+    ],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+# Everything in test_quick plus the two frame tests. Those are ~80s of the ~85s
+# total, and almost all of it is the capture harness sleeping: it drives the
+# game through 46 fixed waits because the game paints on its own thread and
+# there is no way to ask whether it has finished. Phase 2's loop inversion
+# removes the waiting, not the work, and should make these cheap.
+test_suite(
+    name = "test_private",
+    tests = [
+        ":dawnstar_data_test",
+        ":dawnstar_menu_test",
+        ":dawnstar_save_test",
+        ":stormhold_save_test",
+        ":dawnstar_visibility_test",
+        ":stormhold_visibility_test",
+        ":dawnstar_replay_test",
+        ":stormhold_replay_test",
+        ":cross_game_equivalence_test",
+        ":dawnstar_monster_test",
+        ":stormhold_monster_test",
+        ":dawnstar_player_test",
+        ":stormhold_player_test",
+        ":stormhold_data_test",
+        ":stormhold_menu_test",
+        ":dawnstar_frame_test",
+        ":stormhold_frame_test",
+        ":dawnstar_dungeon_test",
+        ":stormhold_dungeon_test",
+        ":dawnstar_pure_surface_test",
+        ":game_jars_inventory_sentinel_test",
+        ":stormhold_geomin_sentinel_test",
+        # The format checks belong here too. Without them this suite was a
+        # strict subset of //:test_quick, so the pre-push hook -- the last gate
+        # before anything leaves the machine -- verified less than the commit
+        # hook it was meant to backstop.
+        ":inflate_jar_test",
+        ":intake_native_test",
+        ":intake_parity_test",
+    ],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+test_suite(
+    name = "test_private_jars",
+    tests = [
+        ":game_jars_inventory_sentinel_test",
+    ],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+
+# Rendered-frame regression. Walks the same play-through as //:*_capture and
+# compares every frame against the PNGs committed under verify/frames-<game>/,
+# across all three display modes (authentic 176x208, widescreen, and 3D).
+#
+# Rendering is deterministic -- the committed frames regenerate byte-for-byte --
+# so any difference is a real change. A mismatch writes <name>.actual.png and
+# <name>.diff.png into the test's output dir, the diff marking changed pixels
+# red over a dimmed frame, so it can be looked at rather than guessed at.
+test_suite(
+    name = "dawnstar_frame_test",
+    tests = ["//src/dawnstar/render:dawnstar_frame_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+test_suite(
+    name = "stormhold_frame_test",
+    tests = ["//src/stormhold/render:stormhold_frame_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+test_suite(
+    name = "test_frames",
+    tests = [
+        ":dawnstar_frame_test",
+        ":stormhold_frame_test",
+    ],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+# Dungeon generation regression. The generator is deterministic -- each dungeon
+# is laid out by a GameRandom seeded from its id -- so one digest per dungeon pins
+# the whole map, and any drift in the RNG or the generation order changes every
+# dungeon at once. The smoke drivers have printed these digests for three
+# sampled dungeons since they were written, but nothing compared them and
+# nothing ran them (they are cc_binary). This covers all 37 and checks them.
+test_suite(
+    name = "dawnstar_dungeon_test",
+    tests = ["//src/dawnstar:dawnstar_dungeon_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+alias(
+    name = "dawnstar_dungeon_dump",
+    actual = "//src/dawnstar:dawnstar_dungeon_dump",
+)
+
+test_suite(
+    name = "stormhold_dungeon_test",
+    tests = ["//src/stormhold:stormhold_dungeon_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+alias(
+    name = "stormhold_dungeon_dump",
+    actual = "//src/stormhold:stormhold_dungeon_dump",
+)
+
+test_suite(
+    name = "test_dungeons",
+    tests = [
+        ":dawnstar_dungeon_test",
+        ":stormhold_dungeon_test",
+    ],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+# JAR intake: identification by content, .lmp expansion, staleness and tree
+# verification. Sealed -- it synthesises JARs in a temp directory from the two
+# real archives' *shapes*, so it needs neither private file. The shapes are
+# pinned separately by game_jars_inventory_sentinel_test, which does read them.
+python_check_test(
+    name = "intake_test",
+    script = "tests/intake_test.py",
+    srcs = ["//bazel:intake.py"],
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+# One paint per tick. The effect flags are drawn-and-cleared in the same call,
+# so a second paint in a tick erases the blood splash and both spell flashes --
+# which is exactly what the loop inversion did, in both games, for four commits.
+# The frame baselines cannot see it: painting an identical frame twice is
+# byte-identical output.
+python_check_test(
+    name = "paint_once_test",
+    script = "tools/check_paint_once.py",
+    srcs = ["//src/common/game:paint_once_source"],
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+)
+# Player and combat regression. j.cpp is the largest rename target in phase 1
+# and nothing tested it: the frame capture creates a character and walks a
+# corridor but never fights, levels or equips. Class j has 17 same-typed scalar
+# fields, so a rename that swaps two of them compiles clean -- the compiler
+# alone does not verify this file. Fixtures are built to make a swap visible;
+# see the header of player_dump.cpp.
+test_suite(
+    name = "dawnstar_player_test",
+    tests = ["//src/dawnstar:dawnstar_player_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+alias(
+    name = "dawnstar_player_dump",
+    actual = "//src/dawnstar:dawnstar_player_dump",
+)
+
+
+test_suite(
+    name = "stormhold_player_test",
+    tests = ["//src/stormhold:stormhold_player_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+alias(
+    name = "stormhold_player_dump",
+    actual = "//src/stormhold:stormhold_player_dump",
+)
+
+test_suite(
+    name = "test_player",
+    tests = [
+        ":dawnstar_player_test",
+        ":stormhold_player_test",
+    ],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+alias(
+    name = "dawnstar_save_dump",
+    actual = "//src/dawnstar:dawnstar_save_dump",
+)
+
+alias(
+    name = "dawnstar_visibility_dump",
+    actual = "//src/dawnstar:dawnstar_visibility_dump",
+)
+
+alias(
+    name = "stormhold_visibility_dump",
+    actual = "//src/stormhold:stormhold_visibility_dump",
+)
+
+alias(
+    name = "stormhold_save_dump",
+    actual = "//src/stormhold:stormhold_save_dump",
+)
+
+alias(
+    name = "stormhold_monster_dump",
+    actual = "//src/stormhold:stormhold_monster_dump",
+)
+
+alias(
+    name = "dawnstar_monster_dump",
+    actual = "//src/dawnstar:dawnstar_monster_dump",
+)
+
+# The thirteen visibility slots, dumped directly. The only thing that noticed a
+# mutation here before was the frame test, through the rendered 3D view -- which
+# catches a break and cannot locate one. See visibility_dump.cpp.
+test_suite(
+    name = "dawnstar_visibility_test",
+    tests = ["//src/dawnstar:dawnstar_visibility_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+test_suite(
+    name = "stormhold_visibility_test",
+    tests = ["//src/stormhold:stormhold_visibility_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+# Save format, the other game. This one loses nothing -- Stormhold has no
+# equivalent of Dawnstar's shift-packed pair -- so every field is expected to
+# round-trip and a LOST row is a regression. The two field *sets* also differ,
+# which is why the serialisers stay separate; see save_dump.cpp.
+test_suite(
+    name = "stormhold_save_test",
+    tests = ["//src/stormhold:stormhold_save_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+# Save format. A round-trip here is deliberately lossy -- the writer folds B_
+# into a shift count that the reader recovers from the low bits -- so the
+# baseline records which fields survive and which do not. A field moving from
+# LOST to same is a failure: it would be a format change. See save_dump.cpp.
+test_suite(
+    name = "dawnstar_save_test",
+    tests = ["//src/dawnstar:dawnstar_save_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+# Monster movement, stats and byte records. Exists mainly to protect the switch
+# fallthrough in d::a(int): `case 1` and `case 4` only flip a sign before
+# falling into their partner, which is what makes 1 the opposite of 3 and 4 the
+# opposite of 2. Adding the "missing" breaks is exactly what a tidy-up invites,
+# and would silently reverse two of four directions.
+test_suite(
+    name = "dawnstar_monster_test",
+    tests = ["//src/dawnstar:dawnstar_monster_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+test_suite(
+    name = "stormhold_monster_test",
+    tests = ["//src/stormhold:stormhold_monster_test"],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+test_suite(
+    name = "test_monsters",
+    tests = [
+        ":dawnstar_monster_test",
+        ":stormhold_monster_test",
+    ],
+    tags = [
+        "manual",
+        "requires-private-data",
+    ],
+)
+
+cc_test(
+    name = "commandflow_unit_test",
+    srcs = ["tests/commandflow_unit_test.cpp"],
+    copts = COPTS,
+    deps = ["//src/common/game:ui"],
+)
+
+# The name form's overlay must be drawn from a post-tick re-read. See the
+# comment at the top of the test; the SDL loop is a binary with a window, so
+# the invariant is pinned against the host seam instead.
+cc_test(
+    name = "dawnstar_form_overlay_test",
+    srcs = ["tests/form_overlay_test.cpp"],
+    defines = ["OVERLAY_GAME_DAWNSTAR"],
+    args = ["$(rootpath :dawnstar_resources)"],
+    data = [":dawnstar_resources"],
+    copts = COPTS,
+    tags = ["manual", "no-remote", "no-remote-cache", "no-remote-exec", "requires-private-data"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "//src/dawnstar:dawnstar_converted",
+        "//src/common/platform:desktop",
+        "//src/common/replay:replay",
+    ],
+)
+
+cc_test(
+    name = "stormhold_form_overlay_test",
+    srcs = ["tests/form_overlay_test.cpp"],
+    args = ["$(rootpath :stormhold_resources)"],
+    data = [":stormhold_resources"],
+    copts = COPTS,
+    tags = ["manual", "no-remote", "no-remote-cache", "no-remote-exec", "requires-private-data"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "//src/stormhold:stormhold_converted",
+        "//src/common/platform:desktop",
+        "//src/common/replay:replay",
+    ],
+)
+
+# `F11` at any moment: on the splash, in the menus, and in play. The forced
+# repaint that follows the toggle must go to whatever the display says is
+# current -- aimed at the game canvas unconditionally it faulted before a
+# player existed and overpainted the menus after. See the test's own header.
+cc_test(
+    name = "dawnstar_wide_toggle_test",
+    srcs = ["tests/wide_toggle_test.cpp"],
+    args = [
+        "dawnstar",
+        "$(rootpath :dawnstar_resources)",
+    ],
+    data = [":dawnstar_resources"],
+    copts = COPTS,
+    tags = ["manual", "no-remote", "no-remote-cache", "no-remote-exec", "requires-private-data"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "//src/common/host:registry",
+        "//src/common/platform:desktop",
+        "//src/common/render:render",
+    ],
+)
+
+cc_test(
+    name = "stormhold_wide_toggle_test",
+    srcs = ["tests/wide_toggle_test.cpp"],
+    args = [
+        "stormhold",
+        "$(rootpath :stormhold_resources)",
+    ],
+    data = [":stormhold_resources"],
+    copts = COPTS,
+    tags = ["manual", "no-remote", "no-remote-cache", "no-remote-exec", "requires-private-data"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "//src/common/host:registry",
+        "//src/common/platform:desktop",
+        "//src/common/render:render",
+    ],
+)
+
+# `port-options`: Select and Left/Right must update settings in place without
+# growing the command list or losing the soft-key bindings.
+cc_test(
+    name = "dawnstar_port_options_keys_test",
+    srcs = ["tests/port_options_keys_test.cpp"],
+    defines = ["PORTKEY_GAME_DAWNSTAR"],
+    args = ["$(rootpath :dawnstar_resources)"],
+    data = [":dawnstar_resources"],
+    copts = COPTS,
+    tags = ["manual", "no-remote", "no-remote-cache", "no-remote-exec", "requires-private-data"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "//src/dawnstar:dawnstar_converted",
+        "//src/common/platform:desktop",
+        "//src/common/replay:replay",
+    ],
+)
+
+cc_test(
+    name = "stormhold_port_options_keys_test",
+    srcs = ["tests/port_options_keys_test.cpp"],
+    args = ["$(rootpath :stormhold_resources)"],
+    data = [":stormhold_resources"],
+    copts = COPTS,
+    tags = ["manual", "no-remote", "no-remote-cache", "no-remote-exec", "requires-private-data"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "//src/stormhold:stormhold_converted",
+        "//src/common/platform:desktop",
+        "//src/common/replay:replay",
+    ],
+)
+
+cc_test(
+    name = "dawnstar_command_flow_test",
+    srcs = ["tests/game_command_flow_test.cpp"],
+    defines = ["COMMAND_GAME_DAWNSTAR"],
+    args = ["$(rootpath :dawnstar_resources)"],
+    data = [":dawnstar_resources"],
+    copts = COPTS,
+    tags = ["manual", "no-remote", "no-remote-cache", "no-remote-exec", "requires-private-data"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "//src/dawnstar:dawnstar_converted",
+        "//src/common/platform:desktop",
+        "//src/common/replay:replay",
+    ],
+)
+
+cc_test(
+    name = "stormhold_command_flow_test",
+    srcs = ["tests/game_command_flow_test.cpp"],
+    args = ["$(rootpath :stormhold_resources)"],
+    data = [":stormhold_resources"],
+    copts = COPTS,
+    tags = ["manual", "no-remote", "no-remote-cache", "no-remote-exec", "requires-private-data"],
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "//src/stormhold:stormhold_converted",
+        "//src/common/platform:desktop",
+        "//src/common/replay:replay",
+    ],
+)

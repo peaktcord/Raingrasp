@@ -1,0 +1,168 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("//bazel:copts.bzl", "CXX_COPTS")
+load("//bazel:version.bzl", "commit_source")
+
+package(default_visibility = ["//visibility:private"])
+
+# The build number and the commit the binary came from, for the log header.
+#
+# Deliberately a leaf: `build --stamp` in .bazelrc means the generated source
+# changes whenever HEAD does, so keeping it out of :platform confines that
+# invalidation to this library and the two binaries that link it.  Nothing
+# else in the graph rebuilds on a commit.
+commit_source(name = "version_src")
+
+cc_library(
+    name = "version",
+    srcs = [":version_src"],
+    hdrs = ["version.hpp"],
+    copts = CXX_COPTS,
+    visibility = ["//src/common/sdl:__pkg__"],
+)
+
+# Host-neutral resource and save-store interfaces. This is intentionally
+# portable: platform implementations, not the contract, carry OS constraints.
+cc_library(
+    name = "platform",
+    srcs = ["platform.cpp"],
+    hdrs = [
+        "game_session.hpp",
+        "platform.hpp",
+    ],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/common/host:__pkg__",
+        "//src/common:__pkg__",
+        "//src/common/replay:__pkg__",
+        "//src/common/sdl:__pkg__",
+        "//src/dawnstar:__subpackages__",
+        "//src/stormhold:__subpackages__",
+    ],
+)
+
+# Host-neutral DEFLATE and ZIP decoding used by both desktop intake and the
+# eventual browser-side JAR loader.
+cc_library(
+    name = "inflate",
+    srcs = ["inflate.cpp"],
+    hdrs = ["inflate.hpp"],
+    copts = CXX_COPTS,
+    visibility = ["//:__pkg__"],
+)
+
+# SHA-256 and the content-tree digest intake keys an unpacked tree by. Kept
+# host-neutral alongside inflate: the browser-side loader will want it too.
+cc_library(
+    name = "sha256",
+    srcs = ["sha256.cpp"],
+    hdrs = ["sha256.hpp"],
+    copts = CXX_COPTS,
+    visibility = ["//:__pkg__"],
+)
+
+cc_library(
+    name = "desktop",
+    srcs = ["desktop.cpp"],
+    hdrs = ["desktop.hpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = [
+        "//:__pkg__",
+        "//src/common/host:__pkg__",
+        "//src/common/replay:__pkg__",
+        "//src/common/sdl:__pkg__",
+        "//src/dawnstar:__pkg__",
+        "//src/dawnstar/render:__pkg__",
+        "//src/stormhold:__pkg__",
+        "//src/stormhold/render:__pkg__",
+    ],
+    deps = [
+        ":platform",
+        "//src/common:runtime",
+    ],
+)
+
+# The SDL AudioSink: the host half of the `added-audio` seam. Only the SDL
+# front-ends link it, so nothing headless can accidentally acquire audio.
+# PortOptions persistence: a text file in the shared settings directory.
+cc_library(
+    name = "port_settings",
+    srcs = ["port_settings.cpp"],
+    hdrs = ["port_settings.hpp"],
+    copts = CXX_COPTS,
+    visibility = ["//visibility:public"],
+    deps = [":platform"],
+)
+
+cc_library(
+    name = "sdl_audio",
+    srcs = ["sdl_audio.cpp"],
+    hdrs = ["sdl_audio.hpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//src/common/sdl:__pkg__"],
+    deps = [
+        ":platform",
+        "@decomp_sdl3//:sdl3",
+    ],
+)
+
+cc_library(
+    name = "intake",
+    srcs = ["intake.cpp"],
+    hdrs = ["intake.hpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = [
+        "//:__pkg__",
+        # The smoke driver resolves its data the same way the front end does.
+        "//src/common/host:__pkg__",
+        "//src/common/sdl:__pkg__",
+    ],
+    deps = [
+        ":desktop",
+        ":inflate",
+        ":platform",
+        ":sha256",
+    ],
+)
+
+# A symbolised stack trace when something crashes. A segfault here is a Windows
+# structured exception, so `catch (...)` never sees it and the process just
+# disappears; this turns that into a stack. Diagnostic only -- install it in a
+# harness main, and it prints and re-raises.
+cc_library(
+    name = "crash_trace",
+    srcs = ["crash_trace.cpp"],
+    hdrs = ["crash_trace.hpp"],
+    copts = CXX_COPTS,
+    deps = [":platform"],
+    linkopts = ["-DEFAULTLIB:dbghelp"],
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = [
+        "//:__pkg__",
+        "//src/common/host:__pkg__",
+        "//src/common/replay:__pkg__",
+        "//src/common/sdl:__pkg__",
+        "//src/dawnstar:__pkg__",
+        "//src/stormhold:__pkg__",
+    ],
+)
+
+# Which call site is holding the memory? Replaces the global operator new /
+# delete to attribute live bytes by stack. Diagnostic only, and heavy -- link
+# it into a probe, never into a front end or a timing test.
+cc_library(
+    name = "alloc_trace",
+    srcs = ["alloc_trace.cpp"],
+    hdrs = ["alloc_trace.hpp"],
+    copts = CXX_COPTS,
+    linkopts = ["-DEFAULTLIB:dbghelp"],
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = [
+        "//:__pkg__",
+        "//src/dawnstar:__pkg__",
+        "//src/stormhold:__pkg__",
+    ],
+)

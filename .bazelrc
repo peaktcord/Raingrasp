@@ -1,0 +1,19 @@
+# Windows does not build runfiles symlink trees by default, and the
+# python_check_test launcher is a .bat that reaches its interpreter and its
+# script by runfiles-relative path. Without this, every such test dies with
+# "The system cannot find the path specified" before running a line of Python
+# -- which is what //:intake_test and //:paint_once_test did once the previous
+# .bazelrc was removed. The git hooks pass --enable_runfiles explicitly, so
+# they stayed green and a bare `bazelisk test //...` did not.
+build --enable_runfiles
+
+common --enable_bzlmod
+build --announce_rc
+test --test_output=errors
+
+# Stamp every build, not just a release config: a log line naming the commit is
+# only useful if the command in the README produces one. The cost is confined
+# to //src/common/platform:version and the two binaries linking it -- nothing
+# digests the game binary, so no sealed-output test is affected.
+build --stamp
+build --workspace_status_command=bazel/workspace_status.bat

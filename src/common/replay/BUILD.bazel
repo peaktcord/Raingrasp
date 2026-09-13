@@ -1,0 +1,223 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@rules_decomp//decomp:sentinel.bzl", "sentinel_test")
+load("//bazel:copts.bzl", "CXX_COPTS")
+load("//bazel:private_tool_output.bzl", "file_sha256", "resource_tool_output")
+
+package(default_visibility = ["//visibility:private"])
+
+COMMON_CONSUMERS = [
+    "//:__pkg__",
+    "//src/common/host:__pkg__",
+    "//src/common/sdl:__pkg__",
+    "//src/dawnstar:__pkg__",
+    "//src/dawnstar:__subpackages__",
+    "//src/stormhold:__pkg__",
+    "//src/stormhold:__subpackages__",
+]
+
+cc_library(
+    name = "replay",
+    srcs = ["replay.cpp"],
+    hdrs = [
+        "headless.hpp",
+        "replay.hpp",
+    ],
+    copts = CXX_COPTS,
+    visibility = COMMON_CONSUMERS,
+    deps = ["//src/common:runtime"],
+)
+
+cc_library(
+    name = "cli",
+    srcs = ["cli.cpp"],
+    hdrs = ["cli.hpp"],
+    copts = CXX_COPTS,
+    visibility = COMMON_CONSUMERS,
+    deps = [":replay"],
+)
+
+# The characterization harnesses. Each takes the game's profile and
+# nothing else names a game (Phase 7); the per-game *_dump.cpp is a main
+# that passes its profile in.
+cc_library(
+    name = "visibility_harness",
+    srcs = ["visibility_harness.cpp"],
+    hdrs = ["visibility_harness.hpp"],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/dawnstar:__pkg__",
+        "//src/stormhold:__pkg__",
+    ],
+    deps = [
+        "//src/common/game:controller",
+        "//src/common/game:world",
+        "//src/common:runtime",
+        "//src/common/platform:desktop",
+        ":replay",
+    ],
+)
+
+cc_library(
+    name = "data_harness",
+    srcs = ["data_harness.cpp"],
+    hdrs = ["data_harness.hpp"],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/dawnstar:__pkg__",
+        "//src/stormhold:__pkg__",
+    ],
+    deps = [
+        "//src/common/game:controller",
+        "//src/common/game:data",
+        "//src/common/game:world",
+        "//src/common:runtime",
+        "//src/common/platform:desktop",
+        ":replay",
+    ],
+)
+
+cc_library(
+    name = "menu_harness",
+    srcs = ["menu_harness.cpp"],
+    hdrs = ["menu_harness.hpp"],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/dawnstar:__pkg__",
+        "//src/stormhold:__pkg__",
+    ],
+    deps = [
+        "//src/common/game:controller",
+        "//src/common/game:ui",
+        "//src/common/game:world",
+        "//src/common:runtime",
+        "//src/common/platform:desktop",
+        "//src/common/render:render",
+        ":replay",
+    ],
+)
+
+cc_library(
+    name = "monster_harness",
+    srcs = ["monster_harness.cpp"],
+    hdrs = ["monster_harness.hpp"],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/dawnstar:__pkg__",
+        "//src/stormhold:__pkg__",
+    ],
+    deps = [
+        "//src/common/game:controller",
+        "//src/common/game:ui",
+        "//src/common/game:world",
+        "//src/common:runtime",
+        "//src/common/platform:desktop",
+        ":replay",
+    ],
+)
+
+cc_library(
+    name = "player_harness",
+    srcs = ["player_harness.cpp"],
+    hdrs = ["player_harness.hpp"],
+    copts = CXX_COPTS,
+    visibility = [
+        "//:__pkg__",
+        "//src/dawnstar:__pkg__",
+        "//src/stormhold:__pkg__",
+    ],
+    deps = [
+        "//src/common/game:base",
+        "//src/common/game:combat",
+        "//src/common/game:controller",
+        "//src/common/game:ui",
+        "//src/common/game:world",
+        "//src/common:runtime",
+        "//src/common/platform:desktop",
+        ":replay",
+    ],
+)
+
+# The replay probe for both games. Which game it drives is `--game`; each
+# game's script and state hash come through the host seam.
+REPLAY_PROBE_DEPS = [
+    ":cli",
+    ":replay",
+    "//src/common/host:registry",
+    "//src/common:runtime",
+    "//src/common/platform:desktop",
+    "//src/common/platform:platform",
+    "//src/common/render:render",
+]
+
+cc_binary(
+    name = "raingrasp_replay",
+    srcs = ["probe_main.cpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//:__pkg__"],
+    deps = REPLAY_PROBE_DEPS,
+)
+
+_PRIVATE_TEST_TAGS = [
+    "manual",
+    "no-remote",
+    "no-remote-cache",
+    "no-remote-exec",
+    "requires-private-data",
+]
+
+resource_tool_output(
+    name = "dawnstar_replay_output",
+    args = ["--game", "dawnstar"],
+    resources = "//:dawnstar_resources",
+    tool = ":raingrasp_replay",
+    tool_writes_output = True,
+    tags = _PRIVATE_TEST_TAGS,
+    visibility = ["//:__pkg__"],
+)
+
+file_sha256(
+    name = "dawnstar_replay_digest",
+    src = ":dawnstar_replay_output",
+    tags = _PRIVATE_TEST_TAGS,
+)
+
+sentinel_test(
+    name = "dawnstar_replay_test",
+    actual = ":dawnstar_replay_digest",
+    expected = "//:validation/sentinels/dawnstar-replay.sha256",
+    size = "medium",
+    tags = _PRIVATE_TEST_TAGS,
+    visibility = ["//:__pkg__"],
+)
+
+resource_tool_output(
+    name = "stormhold_replay_output",
+    args = ["--game", "stormhold"],
+    resources = "//:stormhold_resources",
+    tool = ":raingrasp_replay",
+    tool_writes_output = True,
+    tags = _PRIVATE_TEST_TAGS,
+    visibility = ["//:__pkg__"],
+)
+
+file_sha256(
+    name = "stormhold_replay_digest",
+    src = ":stormhold_replay_output",
+    tags = _PRIVATE_TEST_TAGS,
+)
+
+sentinel_test(
+    name = "stormhold_replay_test",
+    actual = ":stormhold_replay_digest",
+    expected = "//:validation/sentinels/stormhold-replay.sha256",
+    size = "medium",
+    tags = _PRIVATE_TEST_TAGS,
+    visibility = ["//:__pkg__"],
+)

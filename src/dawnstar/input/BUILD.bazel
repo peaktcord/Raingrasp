@@ -1,0 +1,21 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("//bazel:copts.bzl", "CXX_COPTS")
+
+package(default_visibility = ["//visibility:private"])
+
+cc_library(
+    name = "shortcut_host",
+    srcs = ["shortcut_host.cpp"],
+    hdrs = ["shortcut_host.hpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = [
+        "//:__pkg__",
+        "//src/dawnstar/host:__pkg__",
+        "//src/dawnstar/render:__pkg__",
+    ],
+    deps = [
+        "//src/dawnstar:dawnstar_converted",
+        "//src/common/input:game_shortcut_host",
+    ],
+)

@@ -1,0 +1,43 @@
+Controls
+=============================================================
+
+Note: Phone keypads are in the opposite order from keyboard numpads.
+Top row of a phone: 1-2-3. Keyboard: 7-8-9. Translate appropriately.
+
+MOVING
+  W / S ............ forward / back            (phone 2 / 8)
+  A / D ............ turn left / right         (phone d-pad)
+  Q / E ............ strafe left / right       (phone 4 / 6)
+  Arrow keys ....... same as WASD
+
+  Hold a forward, back or strafe key to keep going, if Movement: Hold is set
+  in Display & Controls.
+
+MENUS
+  Enter or Space ... select / confirm
+  Backspace ........ back / cancel
+  Up / Down ........ move the highlight
+  Page Up / Down ... move up/down a page of text
+  Home / End ....... jump to the first / last entry
+  Left / Right ..... change a Display & Controls value
+  Letter keys ...... type a character name, Enter accepts
+
+ACTING
+  F ................ attack                    (phone 1)
+  C ................ cast the readied spell    (phone 3)
+  R ................ ready the next spell      (phone 5)
+  T ................ talk, or open a chest     (phone 9)
+  Z ................ camp                      (phone 0)
+  O ................ options                   (phone 7)
+  I ................ inventory
+  K ................ skills
+  B ................ spells
+  J ................ clue log (journal)        (Dawnstar only)
+  Tab .............. stats
+  H ................ help
+  F6 ............... quicksave
+  F9 ............... quickload
+  M or * ........... map size
+  F11 .............. toggle widescreen 3D view
+  Alt+Enter ........ toggle fullscreen
+  Esc .............. open options, or back out of a menu

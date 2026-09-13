@@ -1,0 +1,21 @@
+module(
+    name = "raingrasp",
+    version = "0.1.0",
+)
+
+bazel_dep(name = "rules_cc", version = "0.2.22")
+bazel_dep(name = "rules_decomp", version = "0.1.0")
+bazel_dep(name = "platforms", version = "1.1.0")
+
+git_override(
+    module_name = "rules_decomp",
+    remote = "https://github.com/peaktcord/rules_decomp.git",
+    commit = "7f4e30a745216827f50a47ccdc43f5852da83da5",
+)
+
+decomp = use_extension("@rules_decomp//:extensions.bzl", "decomp")
+decomp.pypy(version = "7.3.23")
+decomp.sdl3(version = "3.4.14")
+use_repo(decomp, "decomp_pypy", "decomp_sdl3")
+
+register_toolchains("@decomp_pypy//:toolchain")

@@ -1,0 +1,30 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("//bazel:copts.bzl", "CXX_COPTS")
+
+package(default_visibility = ["//visibility:private"])
+
+# The half of the bot that is the same for both games: walking, fighting,
+# looting, equipping, spending level-ups and sweeping the world. Header-only
+# and templated on the game's Dungeon type -- `tileAt` is the only thing each
+# game declares for itself. Each game's own way of winning lives in its tree.
+cc_library(
+    name = "bot",
+    hdrs = [
+        "bot.hpp",
+        "bot_impl.hpp",
+    ],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = [
+        "//src/common/sdl:__pkg__",
+        "//src/dawnstar:__pkg__",
+        "//src/stormhold:__pkg__",
+    ],
+    deps = [
+        "//src/common/game:controller",
+        "//src/common/game:data",
+        "//src/common/game:ui",
+        "//src/common/game:world",
+        "//src/common:runtime",
+    ],
+)

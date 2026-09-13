@@ -1,0 +1,397 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("//bazel:copts.bzl", "CXX_COPTS")
+load("//bazel:variant_diagnostic.bzl", "variant_diagnostic_pair")
+
+package(default_visibility = ["//visibility:private"])
+
+# What is Stormhold's own: its profile, its Extension and Variant, its
+# dungeon generator, its NPC roster and dialogue trees, its `.cus` sprites
+# and its save format. The controller itself is
+# //src/common/game:controller.
+cc_library(
+    name = "stormhold_converted",
+    srcs = [
+        "cus_image.cpp",
+        "dungeon.cpp",
+        "dungeon_gen.cpp",
+        "npc_script.cpp",
+        "extension.cpp",
+        "profile.cpp",
+        "save_codec.cpp",
+        "variant.cpp",
+    ],
+    hdrs = [
+        "cus_image.hpp",
+        "dungeon.hpp",
+        "dungeon_gen.hpp",
+        "npc_script.hpp",
+        "extension.hpp",
+        "profile.hpp",
+        "save_codec.hpp",
+        "variant.hpp",
+    ],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = [
+        "//:__pkg__",
+        "//src/stormhold:__subpackages__",
+    ],
+    deps = [
+        "//src/common/game:base",
+        "//src/common/game:canvas",
+        "//src/common/game:combat",
+        "//src/common/game:controller",
+        "//src/common/game:data",
+        "//src/common/game:save",
+        "//src/common/game:ui",
+        "//src/common/game:visibility",
+        "//src/common/game:world",
+        "//src/common:runtime",
+        "//src/common/render:minimap",
+        "//src/common/render:sprite",
+        "//src/common/replay:replay",
+    ],
+)
+
+cc_test(
+    name = "world_state_test",
+    srcs = ["world_state_test.cpp"],
+    copts = CXX_COPTS,
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//:__pkg__"],
+    deps = [":stormhold_converted"],
+)
+
+# A level-up arriving while an NPC menu is open must not strip that menu's
+# Cancel.  Drives the screen-construction seam directly, so it needs no ROM.
+cc_test(
+    name = "level_up_cancel_test",
+    srcs = ["level_up_cancel_test.cpp"],
+    copts = CXX_COPTS,
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//:__pkg__"],
+    deps = [":stormhold_converted"],
+)
+
+cc_binary(
+    name = "stormhold_data_dump",
+    srcs = ["data_dump.cpp"],
+    copts = CXX_COPTS,
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//:__pkg__"],
+    deps = [
+        ":stormhold_converted",
+        "//src/common/platform:desktop",
+        "//src/common/replay:data_harness",
+    ],
+)
+
+variant_diagnostic_pair(
+    binary_name = "stormhold_menu_dump",
+    test_name = "stormhold_menu_test",
+    src = "menu_dump.cpp",
+    resources = "//:stormhold_resources",
+    sentinel = "//:validation/sentinels/stormhold-menu.sha256",
+    deps = [
+        ":stormhold_converted",
+        "//src/common/platform:desktop",
+        "//src/common/render:render",
+        "//src/common/replay:menu_harness",
+    ],
+)
+
+variant_diagnostic_pair(
+    binary_name = "stormhold_dungeon_dump",
+    test_name = "stormhold_dungeon_test",
+    src = "dungeon_dump.cpp",
+    resources = "//:stormhold_resources",
+    sentinel = "//:validation/sentinels/stormhold-dungeons.sha256",
+    deps = [
+        ":stormhold_converted",
+        "//src/common/platform:desktop",
+    ],
+)
+
+variant_diagnostic_pair(
+    binary_name = "stormhold_player_dump",
+    test_name = "stormhold_player_test",
+    src = "player_dump.cpp",
+    resources = "//:stormhold_resources",
+    sentinel = "//:validation/sentinels/stormhold-player.sha256",
+    deps = [
+        ":stormhold_converted",
+        "//src/common/platform:desktop",
+        "//src/common/replay:player_harness",
+    ],
+)
+
+variant_diagnostic_pair(
+    binary_name = "stormhold_save_dump",
+    test_name = "stormhold_save_test",
+    src = "save_dump.cpp",
+    resources = "//:stormhold_resources",
+    sentinel = "//:validation/sentinels/stormhold-save.sha256",
+    deps = [
+        ":stormhold_converted",
+        "//src/common/platform:desktop",
+    ],
+)
+
+variant_diagnostic_pair(
+    binary_name = "stormhold_visibility_dump",
+    test_name = "stormhold_visibility_test",
+    src = "visibility_dump.cpp",
+    resources = "//:stormhold_resources",
+    sentinel = "//:validation/sentinels/stormhold-visibility.sha256",
+    deps = [
+        ":stormhold_converted",
+        "//src/common/platform:desktop",
+        "//src/common/replay:visibility_harness",
+    ],
+)
+
+variant_diagnostic_pair(
+    binary_name = "stormhold_monster_dump",
+    test_name = "stormhold_monster_test",
+    src = "monster_dump.cpp",
+    resources = "//:stormhold_resources",
+    sentinel = "//:validation/sentinels/stormhold-monsters.sha256",
+    deps = [
+        ":stormhold_converted",
+        "//src/common/platform:desktop",
+        "//src/common/replay:monster_harness",
+    ],
+)
+
+# Can Stormhold be played to its ending? Unlike the sentinel pairs above this
+# asserts rather than comparing a dump. Two stages, so a failure names what
+# broke: --clear sweeps what the gift points have opened, --beat goes on to
+# kill the boss in dungeon 37 and pick up what it drops.
+[
+    cc_test(
+        name = "stormhold_playthrough_%s_test" % stage,
+        srcs = ["playthrough_test.cpp"],
+        args = [
+            "$(rootpath //:stormhold_resources)",
+            "--%s" % stage,
+        ],
+        data = ["//:stormhold_resources"],
+        copts = CXX_COPTS,
+        size = "medium",
+        target_compatible_with = ["@platforms//os:windows"],
+        tags = [
+            "manual",
+            "no-remote",
+            "no-remote-cache",
+            "no-remote-exec",
+            "requires-private-data",
+        ],
+        visibility = ["//:__pkg__"],
+        deps = [
+            ":stormhold_converted",
+            "//src/common/bot:bot",
+            "//src/common/host:game_host",
+            "//src/common/platform:crash_trace",
+            "//src/common/platform:desktop",
+            "//src/common/render:render",
+        ],
+    )
+    for stage in [
+        "clear",
+    ]
+]
+
+# The ending. Kept separate from the list above only because it is the slower
+# of the two: it sweeps, sweeps again for the dungeons that opened late, then
+# walks to dungeon 37 and kills what is waiting there.
+cc_test(
+    name = "stormhold_playthrough_beat_test",
+    srcs = ["playthrough_test.cpp"],
+    args = [
+        "$(rootpath //:stormhold_resources)",
+        "--beat",
+    ],
+    data = ["//:stormhold_resources"],
+    copts = CXX_COPTS,
+    size = "medium",
+    target_compatible_with = ["@platforms//os:windows"],
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+    visibility = ["//:__pkg__"],
+    deps = [
+        ":stormhold_converted",
+        "//src/common/bot:bot",
+        "//src/common/host:game_host",
+        "//src/common/platform:crash_trace",
+        "//src/common/platform:desktop",
+        "//src/common/render:render",
+    ],
+)
+
+# How many gift points does the world actually hold? Arithmetic over the chest
+# and dropped-item tables, no bot involved: it opens each dungeon group in turn
+# and totals the category-11 loot, then asks whether each advancement level is
+# reachable from what the previous ones opened.
+cc_test(
+    name = "stormhold_gift_budget_test",
+    srcs = ["gift_budget_test.cpp"],
+    args = ["$(rootpath //:stormhold_resources)"],
+    data = ["//:stormhold_resources"],
+    copts = CXX_COPTS,
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+    visibility = ["//:__pkg__"],
+    deps = [
+        ":stormhold_converted",
+        "//src/common/host:game_host",
+        "//src/common/platform:desktop",
+        "//src/common/render:render",
+    ],
+)
+
+
+# Does standing beside the Warden allocate a screen every tick? A bounded run
+# -- park the player, tick a fixed number of times, count the owned widgets --
+# so the answer does not require watching the process eat memory.
+cc_test(
+    name = "stormhold_warden_leak_test",
+    srcs = ["warden_leak_test.cpp"],
+    args = ["$(rootpath //:stormhold_resources)"],
+    data = ["//:stormhold_resources"],
+    copts = CXX_COPTS,
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+    visibility = ["//:__pkg__"],
+    deps = [
+        ":stormhold_converted",
+        "//src/common/host:game_host",
+        "//src/common/platform:crash_trace",
+        "//src/common/platform:desktop",
+        "//src/common/render:render",
+    ],
+)
+
+# Portrait art is unloaded on a dungeon change and reloaded per band, so a
+# greeting can draw before the sprite is resident.  Every NPC must survive it.
+cc_test(
+    name = "stormhold_npc_portrait_test",
+    srcs = ["npc_portrait_test.cpp"],
+    args = ["$(rootpath //:stormhold_resources)"],
+    data = ["//:stormhold_resources"],
+    copts = CXX_COPTS,
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+    visibility = ["//:__pkg__"],
+    deps = [
+        ":stormhold_converted",
+        "//src/common/host:game_host",
+        "//src/common/platform:crash_trace",
+        "//src/common/platform:desktop",
+        "//src/common/render:render",
+    ],
+)
+
+# A failed frame must name itself in the log: which layer, which NPC, what
+# state.  Forces a throw out of a paint layer and checks the breadcrumb.
+cc_test(
+    name = "stormhold_paint_breadcrumb_test",
+    srcs = ["paint_breadcrumb_test.cpp"],
+    args = ["$(rootpath //:stormhold_resources)"],
+    data = ["//:stormhold_resources"],
+    copts = CXX_COPTS,
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+    visibility = ["//:__pkg__"],
+    deps = [
+        ":stormhold_converted",
+        "//src/common/host:game_host",
+        "//src/common/platform:crash_trace",
+        "//src/common/platform:desktop",
+        "//src/common/render:render",
+    ],
+)
+
+# Talking to the Warden reads NPCChoicesUI_[6] out of a six-entry array.
+# Drives the real talk path and inspects the greeting's next target.
+cc_test(
+    name = "stormhold_warden_talk_test",
+    srcs = ["warden_talk_test.cpp"],
+    args = ["$(rootpath //:stormhold_resources)"],
+    data = ["//:stormhold_resources"],
+    copts = CXX_COPTS,
+    size = "small",
+    target_compatible_with = ["@platforms//os:windows"],
+    tags = [
+        "manual",
+        "no-remote",
+        "no-remote-cache",
+        "no-remote-exec",
+        "requires-private-data",
+    ],
+    visibility = ["//:__pkg__"],
+    deps = [
+        ":stormhold_converted",
+        "//src/common/host:game_host",
+        "//src/common/platform:crash_trace",
+        "//src/common/platform:desktop",
+        "//src/common/render:render",
+    ],
+)
+
+# Scratch: where does the memory go? Sweeps a few dungeons and reports every
+# world-state container size plus the working set between each, so the growth
+# names itself instead of being guessed at.
+cc_binary(
+    name = "stormhold_growth_probe",
+    srcs = ["growth_probe.cpp"],
+    copts = CXX_COPTS,
+    linkopts = ["-DEFAULTLIB:psapi"],
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//:__pkg__"],
+    deps = [
+        ":stormhold_converted",
+        "//src/common/bot:bot",
+        "//src/common/host:game_host",
+        "//src/common/platform:alloc_trace",
+        "//src/common/platform:crash_trace",
+        "//src/common/platform:desktop",
+        "//src/common/render:render",
+    ],
+)
