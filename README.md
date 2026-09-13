@@ -18,7 +18,7 @@ Help text is not updated with the more modern controls.
 
 ## Running the game
 
-The game will prompt you for jar files on boot. Drag them onto the window to use them. You only need to do this one per game.
+The game will prompt you for jar files on boot. Drag them onto the window to use them. You only need to do this once per game.
 
 This launches directly into the last game you played. You can switch games with 'Game Select' on the menu.
 
